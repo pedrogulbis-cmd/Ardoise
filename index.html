@@ -1,0 +1,1363 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5">
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Ardoise">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="description" content="Dépenses du mois, clôture et historique. Hors ligne, données locales.">
+<title>Ardoise</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232C3AE0'/%3E%3Cpath d='M22 20v24M32 20v24M42 20v24M17 46 47 18' fill='none' stroke='%23fff' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root{
+  /* Clair — papier blanc, encre noire, un seul accent. */
+  --fond:#ffffff; --fond2:#fafafa; --carte:#ffffff;
+  --trait:#e6e6e9; --trait2:#f1f1f4;
+  --texte:#000000; --gris:#71717a; --gris2:#a1a1aa;
+  --acc:#2C3AE0; --accF:rgba(44,58,224,.08); --accB:rgba(44,58,224,.35); --surAcc:#ffffff;
+  --ok:#0B6B45;   --okF:rgba(11,107,69,.09);
+  --att:#B3701E;  --attF:rgba(179,112,30,.10);
+  --dang:#B32424; --dangF:rgba(179,36,36,.08);
+  --voile:rgba(255,255,255,.88);
+  --ombre:0 1px 2px rgba(0,0,0,.04), 0 8px 28px rgba(0,0,0,.06);
+  --r:12px;
+  --tab:calc(58px + env(safe-area-inset-bottom));
+}
+html[data-theme="sombre"]{
+  --fond:#0d0d10; --fond2:#141418; --carte:#141418;
+  --trait:#26262d; --trait2:#1c1c22;
+  --texte:#f6f6f7; --gris:#9a9aa4; --gris2:#6d6d78;
+  --accF:rgba(255,255,255,.06); --accB:rgba(255,255,255,.22); --surAcc:#ffffff;
+  --ok:#4ADE9B;   --okF:rgba(74,222,155,.10);
+  --att:#F0B45C;  --attF:rgba(240,180,92,.12);
+  --dang:#FF7B72; --dangF:rgba(255,123,114,.10);
+  --voile:rgba(13,13,16,.88);
+  --ombre:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--fond);color:var(--texte);
+  font-family:"Inter Tight",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;
+  overscroll-behavior-y:none;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:none;border:0;cursor:pointer;padding:0}
+a{color:var(--acc)}
+h1,h2,h3{font-weight:600;margin:0;letter-spacing:-.02em}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;letter-spacing:-.015em}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.c-ok{color:var(--ok)} .c-att{color:var(--att)} .c-dang{color:var(--dang)}
+.hide{display:none!important}
+
+/* ---------------- ossature ---------------- */
+.wrap{max-width:640px;margin:0 auto;padding:0 18px calc(var(--tab) + 28px);position:relative;z-index:1}
+header.top{position:sticky;top:0;z-index:30;background:var(--voile);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--trait);padding-top:env(safe-area-inset-top)}
+.top-in{max-width:640px;margin:0 auto;padding:11px 18px;display:flex;align-items:center;gap:10px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:17px;letter-spacing:-.03em}
+.brand svg{display:block;border-radius:7px}
+.top-sp{flex:1}
+.ver{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--gris);
+  border:1px solid var(--trait);border-radius:7px;padding:3px 7px;background:var(--fond2)}
+.ver.neuf{color:var(--acc);border-color:var(--accB);background:var(--accF)}
+.iconbtn{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;
+  border:1px solid var(--trait);color:var(--texte);background:var(--carte)}
+.iconbtn:active{background:var(--fond2)}
+.iconbtn.pri{background:var(--acc);border-color:var(--acc);color:var(--surAcc)}
+
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--voile);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-top:1px solid var(--trait);padding-bottom:env(safe-area-inset-bottom)}
+.tabs-in{max-width:640px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr)}
+.tab{padding:8px 0 7px;display:flex;flex-direction:column;align-items:center;gap:3px;
+  color:var(--gris);font-size:10.5px;letter-spacing:-.01em;border-top:2px solid transparent;margin-top:-1px}
+.tab.on{color:var(--texte);border-top-color:var(--acc)}
+.tab.on svg{color:var(--acc)}
+
+/* ---------------- le total, élément signature ---------------- */
+.total{padding:26px 0 20px;border-bottom:1px solid var(--trait)}
+.total-lbl{font-size:13.5px;color:var(--gris)}
+.total-val{font-size:clamp(40px,13vw,54px);font-weight:600;letter-spacing:-.045em;
+  line-height:1.05;margin:6px 0 0;display:block}
+.total-sub{font-size:13px;color:var(--gris);margin-top:12px;display:flex;gap:14px;flex-wrap:wrap}
+.total-sub b{font-weight:500;color:var(--texte)}
+
+/* ---------------- jauge de budget ---------------- */
+.bud{margin-top:14px}
+.bud-l{display:flex;align-items:baseline;gap:8px;font-size:13px;color:var(--gris)}
+.bud-l .r{margin-left:auto;font-family:"IBM Plex Mono",monospace;font-size:12px}
+.bud-b{height:6px;border-radius:4px;background:var(--trait2);overflow:hidden;margin-top:7px}
+.bud-b i{display:block;height:100%;background:var(--gris2);transition:width .25s}
+.bud-b i.ok{background:var(--ok)} .bud-b i.att{background:var(--att)} .bud-b i.dang{background:var(--dang)}
+.bud-nul{margin-top:12px;font-size:13px;color:var(--gris2)}
+.bud-nul button{color:var(--acc);text-decoration:underline;text-underline-offset:3px}
+.total-bar{height:3px;width:56px;background:var(--acc);border-radius:2px;margin:14px 0 0}
+
+/* ---------------- sections et listes ---------------- */
+.sect{margin:22px 0 8px;display:flex;align-items:center;gap:10px}
+.sect h2{font-size:15px;font-weight:600}
+.sect .cnt{font-size:12.5px;color:var(--gris2)}
+.sect .sp{flex:1}
+.ops{border-top:1px solid var(--trait2)}
+.op{display:flex;gap:11px;align-items:flex-start;width:100%;text-align:left;
+  padding:11px 2px;border-bottom:1px solid var(--trait2)}
+.op-ic{width:30px;height:30px;flex:0 0 30px;border-radius:8px;display:grid;place-items:center;
+  background:var(--dangF);color:var(--dang);margin-top:1px}
+.op-mid{flex:1;min-width:0}
+.op-lib{display:block;font-size:14.5px;letter-spacing:-.01em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.op-met{display:block;font-size:11.5px;color:var(--gris2);margin-top:2px;
+  font-family:"IBM Plex Mono",monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.op-mt{font-family:"IBM Plex Mono",monospace;font-size:14px;font-weight:500;white-space:nowrap;padding-top:2px}
+.op.prev{opacity:.72}
+.op.prev .op-ic{border:1px dashed var(--trait);background:transparent;color:var(--gris)}
+.op.prev .op-mt{font-style:italic}
+.tagprev{display:inline-block;font-size:10px;border:1px dashed var(--trait);color:var(--gris2);
+  border-radius:5px;padding:0 4px;margin-left:6px;vertical-align:1px;font-family:"IBM Plex Mono",monospace}
+.jour{font-size:11.5px;color:var(--gris2);padding:14px 2px 5px;font-family:"IBM Plex Mono",monospace;
+  border-bottom:1px solid var(--trait2);display:flex;gap:10px}
+.jour .sp{flex:1}
+.vide{padding:34px 4px;color:var(--gris);font-size:14px;text-align:center;border-bottom:1px solid var(--trait2)}
+.vide b{display:block;color:var(--texte);font-weight:500;margin-bottom:5px;font-size:15px}
+
+/* ---------------- lignes de mois clôturés ---------------- */
+.prow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;
+  padding:13px 2px;border-bottom:1px solid var(--trait2)}
+.pemo{width:38px;height:38px;flex:0 0 38px;border-radius:10px;display:grid;place-items:center;
+  background:var(--fond2);border:1px solid var(--trait2);font-size:13px;line-height:1;
+  font-family:"IBM Plex Mono",monospace;color:var(--gris);text-transform:uppercase}
+.pmid{flex:1;min-width:0}
+.pname{font-weight:500;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  text-transform:capitalize}
+.psub{font-size:12px;color:var(--gris2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pbal{font-size:18px;font-weight:600;white-space:nowrap}
+.pgo{color:var(--gris2);flex:0 0 auto;display:grid;place-items:center}
+
+/* ---------------- chips et boutons ---------------- */
+.chips{display:flex;gap:7px;overflow-x:auto;padding:2px 0;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.chips::-webkit-scrollbar{display:none}
+.chip{white-space:nowrap;font-size:12.5px;padding:6px 11px;border-radius:999px;
+  border:1px solid var(--trait);color:var(--gris);background:var(--carte)}
+.chip.on{color:var(--surAcc);background:var(--acc);border-color:var(--acc)}
+html[data-theme="sombre"] .chip.on{color:#0d0d10;background:var(--texte);border-color:var(--texte)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  padding:11px 15px;border-radius:10px;border:1px solid var(--trait);background:var(--carte);
+  font-size:14px;font-weight:500;letter-spacing:-.01em}
+.btn:active{background:var(--fond2)}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:var(--surAcc)}
+.btn.dang{color:var(--dang);border-color:var(--dangF)}
+.btn.wide{width:100%}
+.btn[disabled]{opacity:.45;pointer-events:none}
+.btns{display:flex;gap:9px;flex-wrap:wrap;margin:14px 0}
+.btns.grow>*{flex:1}
+
+/* ---------------- panneau et modale ---------------- */
+#sheet:empty,#modal:empty{display:none}
+.sheet{position:fixed;inset:0;z-index:51;background:var(--fond);overflow:auto;overscroll-behavior:contain;
+  animation:mte .22s cubic-bezier(.22,.7,.3,1)}
+@keyframes mte{from{transform:translateY(14px);opacity:.4}to{transform:none;opacity:1}}
+.sheet-in{max-width:640px;margin:0 auto;padding:0 18px 40px}
+.sheet-top{position:sticky;top:0;z-index:5;background:var(--voile);backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--trait);
+  padding:calc(env(safe-area-inset-top) + 9px) 18px 9px;display:flex;align-items:center;gap:10px}
+.sheet-top .t{font-weight:600;letter-spacing:-.02em;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;text-transform:capitalize}
+.sheet-top .sp{flex:1}
+.mdl-bg{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.34);
+  display:flex;align-items:flex-end;justify-content:center;padding:0}
+@media(min-width:560px){.mdl-bg{align-items:center;padding:20px}}
+.mdl{background:var(--fond);width:100%;max-width:460px;border-radius:16px 16px 0 0;
+  box-shadow:var(--ombre);max-height:92vh;overflow:auto;overscroll-behavior:contain;
+  padding:18px 18px calc(18px + env(safe-area-inset-bottom));animation:mte .2s cubic-bezier(.22,.7,.3,1)}
+@media(min-width:560px){.mdl{border-radius:16px}}
+.mdl h3{font-size:17px;margin-bottom:2px}
+.mdl .sous{font-size:13px;color:var(--gris);margin-bottom:14px}
+.champ{margin:12px 0}
+.champ>label{display:block;font-size:12.5px;color:var(--gris);margin-bottom:5px}
+input[type=text],input[type=date],input[type=number],select,textarea{
+  width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--trait);
+  background:var(--carte);color:var(--texte);font-size:15px;-webkit-appearance:none;appearance:none}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4.5 6 8.5l4-4' fill='none' stroke='%2371717a' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--acc);outline-offset:1px;border-color:transparent}
+.mt-in{display:flex;align-items:center;gap:9px}
+.mt-in input{font-size:26px;font-weight:600;letter-spacing:-.03em;padding:12px;
+  font-variant-numeric:tabular-nums;text-align:right}
+.mt-eur{font-size:22px;color:var(--gris);font-weight:500}
+.raccourcis{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.raccourcis button{font-size:12.5px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait);
+  color:var(--gris);background:var(--carte);font-family:"IBM Plex Mono",monospace}
+.aide{font-size:12px;color:var(--gris2);margin-top:6px}
+.bascule{display:flex;align-items:center;gap:11px;padding:11px 12px;border:1px solid var(--trait);
+  border-radius:10px;margin:12px 0;text-align:left;width:100%}
+.bascule .l{flex:1;min-width:0;font-size:13.5px}
+.bascule .d{font-size:12px;color:var(--gris);margin-top:2px}
+.bascule .k{width:40px;height:24px;border-radius:999px;background:var(--trait);flex:0 0 40px;position:relative;transition:background .18s}
+.bascule .k::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;
+  background:var(--fond);box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .18s}
+.bascule.on .k{background:var(--acc)}
+.bascule.on .k::after{transform:translateX(16px)}
+
+/* ---------------- réglages ---------------- */
+.bloc{border:1px solid var(--trait);border-radius:var(--r);margin:12px 0;overflow:hidden;background:var(--carte)}
+.bloc-h{padding:13px 14px;font-weight:500;font-size:14.5px;border-bottom:1px solid var(--trait2);
+  display:flex;align-items:center;gap:9px}
+.bloc-b{padding:14px}
+.lig{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--trait2)}
+.lig:first-child{border-top:0;padding-top:0}
+.lig .l{flex:1;min-width:0;font-size:14px}
+.lig .d{font-size:12px;color:var(--gris);margin-top:2px}
+.seg{display:inline-flex;border:1px solid var(--trait);border-radius:9px;overflow:hidden}
+.seg button{padding:7px 11px;font-size:13px;color:var(--gris);border-right:1px solid var(--trait)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--acc);color:var(--surAcc)}
+html[data-theme="sombre"] .seg button.on{background:var(--texte);color:#0d0d10}
+.pastilles{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.past{width:28px;height:28px;border-radius:50%;border:2px solid transparent;position:relative}
+.past.on{box-shadow:0 0 0 2px var(--fond),0 0 0 4px var(--texte)}
+.apercu{display:flex;align-items:center;gap:10px;margin-top:16px}
+.jrn{border-top:1px solid var(--trait2);padding:12px 0}
+.jrn:first-of-type{border-top:0}
+.jrn-h{display:flex;align-items:baseline;gap:9px}
+.jrn-v{font-family:"IBM Plex Mono",monospace;font-size:12.5px;font-weight:500}
+.jrn-d{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--gris2)}
+.jrn-t{font-size:13px;color:var(--gris);margin-left:auto}
+.jrn ul{margin:7px 0 0;padding-left:17px}
+.jrn li{font-size:13px;line-height:1.55;margin-bottom:3px;color:var(--gris)}
+.jrn li::marker{color:var(--acc)}
+.barre{height:6px;border-radius:4px;background:var(--trait2);overflow:hidden;margin-top:7px}
+.barre i{display:block;height:100%;background:var(--acc)}
+
+/* ---------------- toast ---------------- */
+.toast{position:fixed;left:50%;transform:translate(-50%,90px);bottom:calc(var(--tab) + 14px);z-index:70;
+  background:var(--texte);color:var(--fond);border-radius:11px;padding:11px 14px;font-size:13.5px;
+  display:flex;align-items:center;gap:14px;max-width:calc(100% - 28px);box-shadow:var(--ombre);
+  opacity:0;pointer-events:none;transition:transform .22s cubic-bezier(.22,.7,.3,1),opacity .22s}
+.toast.on{transform:translate(-50%,0);opacity:1}
+.toast.agir{pointer-events:auto}
+.toast-act{color:var(--fond);font-weight:600;text-decoration:underline;text-underline-offset:3px;flex:0 0 auto}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:6px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 64 64" aria-hidden="true">
+        <rect width="64" height="64" rx="14" fill="var(--acc)"/>
+        <path d="M22 20v24M32 20v24M42 20v24M17 46 47 18" fill="none" stroke="var(--surAcc)" stroke-width="5" stroke-linecap="round"/>
+      </svg>
+      Ardoise
+    </div>
+    <button class="ver" id="ver-chip" data-act="journal-ouvrir" title="Voir les nouveautés"></button>
+    <div class="top-sp"></div>
+    <button class="iconbtn pri" data-act="nouvelle-depense" aria-label="Nouvelle dépense" title="Nouvelle dépense">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="wrap" id="view"></main>
+
+<nav class="tabs"><div class="tabs-in" id="tabs"></div></nav>
+
+<div id="sheet"></div>
+<div id="modal"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ============================================================
+   Ardoise — les dépenses du mois, effacées à la clôture.
+   Un seul fichier, aucune dépendance, stockage local (IndexedDB).
+   ============================================================ */
+
+const VERSION = "1.0.0";
+const SCHEMA  = 1;
+const JOURNAL = [
+  { v:"1.0.0", d:"2026-09-03", t:"Première version", l:[
+    "Une dépense se saisit en trois champs : le montant, ce que c'est, et la date — celle du jour par défaut, décalable si la dépense tombe plus tard.",
+    "Le total des dépenses en cours occupe le haut de l'écran. Sous lui, le budget que tu te fixes : vert tant qu'il reste de la marge, orange à l'approche, rouge à partir de 95 %.",
+    "Sans budget renseigné, le total reste en noir et la jauge disparaît.",
+    "Clôturer le mois verse tout dans l'historique et repart de zéro. Les dépenses datées du mois suivant peuvent être reportées au lieu d'être clôturées.",
+    "L'historique garde chaque mois avec son total ; on l'ouvre pour en voir le détail, on peut le renommer, le rouvrir ou le supprimer.",
+    "Thème clair ou sombre, couleur d'accent au choix, export et import JSON, installation sur l'écran d'accueil."
+  ]}
+];
+
+/* ---------- thème et accent, lus avant tout rendu ---------- */
+const LSTHEME = "ardoise.theme";
+const LSACC   = "ardoise.accent";
+const THEMES  = [["clair","Clair"],["sombre","Sombre"],["auto","Système"]];
+const ACCENTS = [
+  ["#2C3AE0","Encre"], ["#7A3FA8","Prune"], ["#0E7490","Océan"],
+  ["#0F6E4A","Forêt"], ["#B3541E","Cuivre"], ["#B32455","Grenat"], ["#3F4756","Graphite"]
+];
+const media = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+
+function litLS(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function ecritLS(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+function themeActuel(){ return litLS(LSTHEME) || "clair"; }
+function accentActuel(){ return litLS(LSACC) || ACCENTS[0][0]; }
+
+function hexRGBA(h,a){
+  const n = parseInt(h.slice(1),16);
+  return "rgba(" + ((n>>16)&255) + "," + ((n>>8)&255) + "," + (n&255) + "," + a + ")";
+}
+/* Luminance relative : un accent clair réclame du texte noir par-dessus. */
+function surAccent(h){
+  const n = parseInt(h.slice(1),16);
+  const l = (0.299*((n>>16)&255) + 0.587*((n>>8)&255) + 0.114*(n&255)) / 255;
+  return l > .62 ? "#000000" : "#ffffff";
+}
+function appliquerAccent(h){
+  const r = document.documentElement.style;
+  r.setProperty("--acc", h);
+  r.setProperty("--accF", hexRGBA(h,.08));
+  r.setProperty("--accB", hexRGBA(h,.35));
+  r.setProperty("--surAcc", surAccent(h));
+}
+function appliquerTheme(t){
+  const sombre = t === "auto" ? !!(media && media.matches) : t === "sombre";
+  document.documentElement.setAttribute("data-theme", sombre ? "sombre" : "clair");
+  const m = document.querySelector('meta[name="theme-color"]');
+  if(m) m.setAttribute("content", sombre ? "#0d0d10" : "#ffffff");
+}
+appliquerTheme(themeActuel());
+appliquerAccent(accentActuel());
+if(media && media.addEventListener)
+  media.addEventListener("change", () => { if(themeActuel() === "auto") appliquerTheme("auto"); });
+
+/* ---------- utilitaires ---------- */
+const $ = s => document.querySelector(s);
+const p2 = n => String(n).padStart(2,"0");
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+const todayISO = () => { const d = new Date(); return d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate()); };
+
+/* ---------- argent ----------
+   Tout est stocké en centimes entiers : additionner des flottants finit
+   toujours par produire un total à 0,000000004 près. */
+function cents(txt){
+  if(typeof txt === "number") return Math.round(txt*100);
+  const s = String(txt||"").replace(/\s|\u00a0|\u202f/g,"").replace(",",".").replace(/[^0-9.\-]/g,"");
+  const v = parseFloat(s);
+  return isNaN(v) ? 0 : Math.round(v*100);
+}
+let _nf = null;
+function fmt(c){
+  if(!_nf) _nf = new Intl.NumberFormat("fr-FR", { style:"currency", currency:"EUR" });
+  return _nf.format((c||0)/100);
+}
+/* Saisie brute pour un champ : jamais de symbole, jamais de séparateur de milliers. */
+function brut(c){ return ((c||0)/100).toFixed(2).replace(".", ","); }
+
+/* ---------- dates ---------- */
+const MOIS = ["janv","févr","mars","avr","mai","juin","juil","août","sept","oct","nov","déc"];
+const MOIS_LONG = ["janvier","février","mars","avril","mai","juin","juillet","août",
+                   "septembre","octobre","novembre","décembre"];
+const JOURS = ["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"];
+function frDate(iso, avecAn){
+  if(!iso) return "—";
+  const d = new Date(iso + "T12:00:00");
+  if(isNaN(d)) return iso;
+  const an = (avecAn || d.getFullYear() !== new Date().getFullYear()) ? " " + d.getFullYear() : "";
+  return d.getDate() + " " + MOIS[d.getMonth()] + an;
+}
+function moisLong(iso){
+  const d = new Date(iso + "T12:00:00");
+  if(isNaN(d)) return iso;
+  return MOIS_LONG[d.getMonth()] + " " + d.getFullYear();
+}
+function relDate(iso){
+  const a = new Date(iso+"T12:00:00"), b = new Date(todayISO()+"T12:00:00");
+  const j = Math.round((a-b)/86400000);
+  if(j === 0) return "aujourd'hui";
+  if(j === 1) return "demain";
+  if(j === -1) return "hier";
+  if(j > 1 && j < 7) return JOURS[a.getDay()] + " " + frDate(iso);
+  return frDate(iso);
+}
+function quand(ts){
+  if(!ts) return "—";
+  const d = new Date(ts);
+  return frDate(d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate()), true) +
+         " " + p2(d.getHours()) + ":" + p2(d.getMinutes());
+}
+
+function toast(msg, action){
+  const t = $("#toast");
+  t.innerHTML = '<span>' + esc(msg) + '</span>' +
+    (action ? '<button class="toast-act" data-act="' + action + '">Annuler</button>' : "");
+  t.classList.toggle("agir", !!action);
+  t.classList.add("on");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove("on","agir"), action ? 7000 : 2400);
+}
+function fermerToast(){ const t = $("#toast"); if(t) t.classList.remove("on","agir"); clearTimeout(toast._t); }
+/* Ce qu'on vient de supprimer, gardé le temps d'un éventuel remords. */
+let corbeille = null;
+
+const ICONES = {
+  home:'<path d="M4 11.2 12 4l8 7.2M6.5 9.6V20h11V9.6"/>',
+  archive:'<path d="M3.5 8.5h17V19a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V8.5z"/><path d="M2.8 4.5h18.4v4H2.8zM9.8 12.5h4.4"/>',
+  cog:'<circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.2M12 18.8V21M21 12h-2.2M5.2 12H3M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6M18.4 18.4l-1.6-1.6M7.2 7.2 5.6 5.6"/>',
+  moins:'<path d="M5.5 12h13"/>',
+  plus:'<path d="M12 5.5v13M5.5 12h13"/>',
+  fleche:'<path d="M15 5l-7 7 7 7"/>',
+  chev:'<path d="M9 5l7 7-7 7"/>',
+  croix:'<path d="M6 6l12 12M18 6 6 18"/>',
+  crayon:'<path d="M4 20h4L19 9a2.5 2.5 0 0 0-3.5-3.5L4.5 16.5 4 20z"/>',
+  verrou:'<rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
+  horloge:'<circle cx="12" cy="12" r="8.2"/><path d="M12 7.5V12l3 1.8"/>',
+  cal:'<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/>'
+};
+/* Le sigle : les bâtons de l'ardoise du café, barrés par le cinquième trait.
+   Il se peint avec les variables du thème, donc il suit l'accent sans être
+   redessiné, et son trait bascule au noir quand l'accent est trop clair. */
+function icoSVG(t){
+  return '<svg width="' + t + '" height="' + t + '" viewBox="0 0 64 64" aria-hidden="true" style="display:block">' +
+    '<rect width="64" height="64" rx="14" fill="var(--acc)"/>' +
+    '<path d="M22 20v24M32 20v24M42 20v24M17 46 47 18" fill="none" stroke="var(--surAcc)" ' +
+    'stroke-width="5" stroke-linecap="round"/></svg>';
+}
+function svg(n, t, sw){
+  return '<svg width="'+(t||20)+'" height="'+(t||20)+'" viewBox="0 0 24 24" fill="none" ' +
+    'stroke="currentColor" stroke-width="'+(sw||1.8)+'" stroke-linecap="round" stroke-linejoin="round" ' +
+    'aria-hidden="true">' + (ICONES[n]||"") + '</svg>';
+}
+
+/* ============================================================
+   STOCKAGE — IndexedDB
+   L'objet DB est la source de vérité en mémoire : tout le rendu travaille
+   dessus de façon synchrone. Seules la lecture initiale et les écritures
+   passent par la base, et les écritures sont granulaires : ajouter une
+   dépense écrit un enregistrement, pas la base entière.
+   ============================================================ */
+const DEFAULTS = {
+  version:SCHEMA, depenses:{}, periodes:{},
+  settings:{ theme:"clair", accent:ACCENTS[0][0], budget:0, reporterFuturs:true },
+  meta:{ cree:Date.now(), modifie:0, exporte:0, vue:null }
+};
+let DB = JSON.parse(JSON.stringify(DEFAULTS));
+let pret = false;
+
+const IDB = (() => {
+  const NOM = "ardoise", V = 1;
+  let db = null;
+  const prom = r => new Promise((res,rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  const stores = ["depenses","periodes","kv"];
+  return {
+    ouvrir(){
+      return new Promise((res,rej) => {
+        if(!window.indexedDB) return rej(new Error("IndexedDB indisponible"));
+        const r = indexedDB.open(NOM, V);
+        r.onupgradeneeded = () => {
+          const d = r.result;
+          if(!d.objectStoreNames.contains("depenses")) d.createObjectStore("depenses", { keyPath:"id" });
+          if(!d.objectStoreNames.contains("periodes")) d.createObjectStore("periodes", { keyPath:"id" });
+          if(!d.objectStoreNames.contains("kv"))       d.createObjectStore("kv");
+        };
+        r.onsuccess = () => { db = r.result; res(db); };
+        r.onerror   = () => rej(r.error || new Error("ouverture refusée"));
+        r.onblocked = () => rej(new Error("base verrouillée par un autre onglet"));
+      });
+    },
+    async tout(){
+      const t = db.transaction(stores, "readonly");
+      const [depenses, periodes, kk, kvv] = await Promise.all([
+        prom(t.objectStore("depenses").getAll()),
+        prom(t.objectStore("periodes").getAll()),
+        prom(t.objectStore("kv").getAllKeys()),
+        prom(t.objectStore("kv").getAll())
+      ]);
+      const kv = {}; kk.forEach((k,i) => { kv[k] = kvv[i]; });
+      return { depenses, periodes, kv };
+    },
+    ecrire(lots){
+      return new Promise((res,rej) => {
+        const t = db.transaction(stores, "readwrite");
+        t.oncomplete = () => res();
+        t.onerror = () => rej(t.error);
+        t.onabort = () => rej(t.error || new Error("écriture annulée"));
+        const D = t.objectStore("depenses"), P = t.objectStore("periodes"), K = t.objectStore("kv");
+        (lots.depenses||[]).forEach(x => D.put(x));
+        (lots.supprDepenses||[]).forEach(id => D.delete(String(id)));
+        (lots.periodes||[]).forEach(x => P.put(x));
+        (lots.supprPeriodes||[]).forEach(id => P.delete(String(id)));
+        Object.keys(lots.kv||{}).forEach(k => K.put(lots.kv[k], k));
+      });
+    },
+    vider(){
+      return new Promise((res,rej) => {
+        const t = db.transaction(stores, "readwrite");
+        t.oncomplete = () => res(); t.onerror = () => rej(t.error);
+        stores.forEach(x => t.objectStore(x).clear());
+      });
+    }
+  };
+})();
+
+/* ---------- file d'écriture ---------- */
+const sale = { depenses:new Set(), supprDepenses:new Set(),
+               periodes:new Set(), supprPeriodes:new Set(), kv:false };
+let _fl;
+function planifier(interne){
+  clearTimeout(_fl); _fl = setTimeout(ecouler, 150);
+  if(!interne) DB.meta.modifie = Date.now();
+}
+async function ecouler(){
+  if(!pret) return;
+  const rien = !sale.depenses.size && !sale.supprDepenses.size &&
+               !sale.periodes.size && !sale.supprPeriodes.size && !sale.kv;
+  if(rien) return;
+  const lots = { depenses:[], supprDepenses:[...sale.supprDepenses],
+                 periodes:[], supprPeriodes:[...sale.supprPeriodes], kv:{} };
+  sale.depenses.forEach(id => { const x = DB.depenses[id]; if(x) lots.depenses.push(x); });
+  sale.periodes.forEach(id => { const x = DB.periodes[id]; if(x) lots.periodes.push(x); });
+  if(sale.kv) lots.kv = { settings:DB.settings, meta:DB.meta, version:SCHEMA };
+  Object.values(sale).forEach(v => { if(v && v.clear) v.clear(); });
+  sale.kv = false;
+  try{ await IDB.ecrire(lots); }
+  catch(e){ toast("Enregistrement impossible : " + ((e && e.message) || e)); }
+}
+function sauver(interne){ sale.kv = true; planifier(interne); }
+function sauverDepense(d){ if(d) sale.depenses.add(String(d.id)); sale.kv = true; planifier(); }
+function sauverPeriode(p){ if(p) sale.periodes.add(String(p.id)); sale.kv = true; planifier(); }
+function supprimerDepenseDB(id){ delete DB.depenses[id]; sale.supprDepenses.add(String(id)); sale.kv = true; planifier(); }
+function supprimerPeriodeDB(id){ delete DB.periodes[id]; sale.supprPeriodes.add(String(id)); sale.kv = true; planifier(); }
+function toutSalir(){
+  Object.keys(DB.depenses).forEach(id => sale.depenses.add(id));
+  Object.keys(DB.periodes).forEach(id => sale.periodes.add(id));
+  sale.kv = true; planifier();
+}
+function assembler(k){
+  const d = JSON.parse(JSON.stringify(DEFAULTS));
+  (k.depenses||[]).forEach(x => { d.depenses[x.id] = x; });
+  (k.periodes||[]).forEach(x => { d.periodes[x.id] = x; });
+  d.settings = { ...DEFAULTS.settings, ...(k.kv.settings || {}) };
+  d.meta     = { ...DEFAULTS.meta,     ...(k.kv.meta     || {}) };
+  return d;
+}
+/* Fusion d'une sauvegarde, jamais destructive : rien n'est écrasé, seules les
+   entrées absentes sont ajoutées. Les identifiants font foi. */
+function fusionnerSauvegarde(x){
+  if(!x || !x.depenses) throw new Error("format inattendu");
+  let nd = 0, np = 0;
+  Object.entries(x.periodes||{}).forEach(([k,v]) => { if(!DB.periodes[k]){ DB.periodes[k] = v; np++; } });
+  Object.entries(x.depenses||{}).forEach(([k,v]) => { if(!DB.depenses[k]){ DB.depenses[k] = v; nd++; } });
+  // Une dépense rattachée à un mois absent retomberait dans le vide : on la
+  // remet en cours plutôt que de la perdre.
+  Object.values(DB.depenses).forEach(d => { if(d.periode && !DB.periodes[d.periode]) d.periode = ""; });
+  if(x.settings && !DB.settings.budget && x.settings.budget) DB.settings.budget = x.settings.budget;
+  toutSalir();
+  return { nd, np };
+}
+
+/* ============================================================
+   MODÈLE
+   Une dépense porte un montant en centimes, un libellé, une date, et le mois
+   qui l'a absorbée (vide tant qu'elle est en cours). Aucun total n'est stocké :
+   tout se recalcule, donc rien ne peut diverger.
+   ============================================================ */
+const depensesAll = () => Object.values(DB.depenses);
+const periodesAll = () => Object.values(DB.periodes);
+const enCours  = () => depensesAll().filter(d => !d.periode);
+const dePeriode = pid => depensesAll().filter(d => d.periode === pid);
+const somme = l => l.reduce((s,d) => s + (d.montant||0), 0);
+const futures = l => l.filter(d => d.date > todayISO());
+const budget = () => DB.settings.budget || 0;
+
+/* Tri d'affichage : la date décroissante, et à date égale la saisie la plus
+   récente en premier. */
+function trier(l){
+  return l.slice().sort((a,b) => (a.date === b.date ? (b.cree||0) - (a.cree||0) : (a.date < b.date ? 1 : -1)));
+}
+function grouper(l){
+  const g = [];
+  let cle = null, cur = null;
+  trier(l).forEach(d => {
+    if(d.date !== cle){ cle = d.date; cur = { date:cle, items:[] }; g.push(cur); }
+    cur.items.push(d);
+  });
+  return g;
+}
+/* L'état du budget : vert tant qu'il reste de la marge, orange à l'approche,
+   rouge à partir de 95 % — dépassement compris. */
+function etatBudget(tot, b){
+  if(!b) return null;
+  const r = tot / b;
+  if(r >= .95) return "dang";
+  if(r >= .75) return "att";
+  return "ok";
+}
+const CL = { ok:"c-ok", att:"c-att", dang:"c-dang" };
+
+function creerDepense(o){
+  const d = { id:uid(), montant:o.montant, libelle:(o.libelle||"").trim(),
+              date:o.date || todayISO(), periode:"", cree:Date.now() };
+  DB.depenses[d.id] = d; sauverDepense(d);
+  return d;
+}
+function libelleDe(d){ return (d.libelle || "").trim() || "Dépense"; }
+
+/* Clôture : chaque dépense en cours reçoit l'identifiant du mois, ce qui la
+   retire de l'accueil sans l'effacer. Rien n'est recopié, rien n'est perdu. */
+function cloturer(titre, reporter){
+  const list = enCours();
+  const reportees = reporter ? futures(list) : [];
+  const dedans = list.filter(d => reportees.indexOf(d) === -1);
+  if(!dedans.length) return null;
+  const dates = dedans.map(d => d.date).sort();
+  const p = { id:uid(), titre:(titre||"").trim() || moisLong(todayISO()),
+              cloture:Date.now(), budget:budget(), debut:dates[0], fin:dates[dates.length-1] };
+  DB.periodes[p.id] = p; sauverPeriode(p);
+  dedans.forEach(d => { d.periode = p.id; sauverDepense(d); });
+  return { p, nb:dedans.length, reportees:reportees.length };
+}
+function rouvrir(pid){
+  dePeriode(pid).forEach(d => { d.periode = ""; sauverDepense(d); });
+  supprimerPeriodeDB(pid);
+}
+function supprimerPeriode(pid){
+  dePeriode(pid).forEach(d => supprimerDepenseDB(d.id));
+  supprimerPeriodeDB(pid);
+}
+/* Un paquet mis de côté avant suppression, restauré tel quel si on se ravise. */
+function restaurerPaquet(paq){
+  (paq.periodes||[]).forEach(p => { DB.periodes[p.id] = p; sauverPeriode(p); });
+  (paq.depenses||[]).forEach(d => { DB.depenses[d.id] = d; sauverDepense(d); });
+}
+
+/* ============================================================
+   ÉTAT DE L'INTERFACE
+   ============================================================ */
+const TABS = [
+  { id:"accueil",   l:"Accueil",    i:"home" },
+  { id:"histo",     l:"Historique", i:"archive" },
+  { id:"reglages",  l:"Réglages",   i:"cog" }
+];
+const state = { tab:"accueil", periode:null, modal:null, journal:false, neuf:false, quota:null };
+
+function render(){
+  const v = $("#view");
+  const anc = document.querySelector(".sheet");
+  const posSheet = anc ? anc.scrollTop : 0;
+  const posPage = window.scrollY;
+  const h = v.offsetHeight;
+  if(h) v.style.minHeight = h + "px";
+  try{ dessiner(); }
+  finally{ requestAnimationFrame(() => { v.style.minHeight = ""; }); }
+  const neuf = document.querySelector(".sheet");
+  if(neuf && posSheet) neuf.scrollTop = posSheet;
+  if(window.scrollY !== posPage) window.scrollTo(0, posPage);
+}
+
+function dessiner(){
+  $("#tabs").innerHTML = TABS.map(t =>
+    '<button class="tab ' + (state.tab === t.id ? "on" : "") + '" data-act="tab" data-id="' + t.id + '">' +
+    svg(t.i, 20) + '<span>' + t.l + '</span></button>').join("");
+
+  const chip = $("#ver-chip");
+  if(chip){ chip.textContent = "v" + VERSION; chip.classList.toggle("neuf", state.neuf); }
+
+  const v = $("#view");
+  if(state.tab === "accueil")    v.innerHTML = vueAccueil();
+  else if(state.tab === "histo") v.innerHTML = vueHistorique();
+  else                           v.innerHTML = vueReglages();
+
+  if(state.periode && !DB.periodes[state.periode]) state.periode = null;
+  $("#sheet").innerHTML = state.periode ? vuePeriode(DB.periodes[state.periode]) : "";
+  $("#modal").innerHTML = state.modal ? vueModal(state.modal) : "";
+
+  const couvert = !!($("#sheet").firstChild || $("#modal").firstChild);
+  document.body.style.overflow = couvert ? "hidden" : "";
+  if(state.modal && state.modal.focus){
+    const el = document.getElementById(state.modal.focus);
+    if(el && document.activeElement !== el){ el.focus(); if(el.select) el.select(); }
+  }
+}
+
+/* ============================================================
+   ACCUEIL
+   Le total est l'élément le plus grand de l'écran : c'est la réponse à la
+   seule question qu'on se pose en ouvrant l'application.
+   ============================================================ */
+function ligneDepense(d){
+  const prev = d.date > todayISO();
+  return '<button class="op' + (prev ? " prev" : "") + '" data-act="modifier-depense" data-id="' + d.id + '">' +
+    '<span class="op-ic">' + svg(prev ? "horloge" : "moins", 15, 2) + '</span>' +
+    '<span class="op-mid"><span class="op-lib">' + esc(libelleDe(d)) +
+      (prev ? '<span class="tagprev">à venir</span>' : "") + '</span>' +
+    '<span class="op-met">' + esc(relDate(d.date)) + '</span></span>' +
+    '<span class="op-mt">−' + fmt(d.montant) + '</span></button>';
+}
+
+function blocBudget(tot, b, compact){
+  if(!b){
+    return compact ? "" :
+      '<div class="bud-nul">Aucun budget fixé — ' +
+      '<button data-act="modifier-budget">en définir un</button></div>';
+  }
+  const e = etatBudget(tot, b);
+  const pc = Math.min(100, Math.round(tot / b * 100));
+  const reste = b - tot;
+  return '<div class="bud"><div class="bud-l">' +
+    '<span class="' + CL[e] + '">' + esc(fmt(tot)) + '</span><span>sur ' + esc(fmt(b)) + '</span>' +
+    '<span class="r ' + CL[e] + '">' + (reste >= 0 ? "reste " + fmt(reste) : "+" + fmt(-reste)) + '</span>' +
+    '</div><div class="bud-b"><i class="' + e + '" style="width:' + pc + '%"></i></div></div>';
+}
+
+function vueAccueil(){
+  const list = enCours();
+  const tot = somme(list);
+  const b = budget();
+  const e = etatBudget(tot, b);
+  const fut = futures(list);
+  const totFut = somme(fut);
+
+  let h = '<section class="total">' +
+    '<div class="total-lbl">Dépenses en cours</div>' +
+    '<span class="total-val num ' + (e ? CL[e] : "") + '">' + esc(fmt(tot)) + '</span>' +
+    blocBudget(tot, b, false);
+
+  const sub = [];
+  sub.push('<span><b>' + list.length + '</b> ' + (list.length > 1 ? "dépenses" : "dépense") + '</span>');
+  if(fut.length) sub.push('<span>dont <b>' + esc(fmt(totFut)) + '</b> à venir</span>');
+  h += '<div class="total-sub">' + sub.join("") + '</div></section>';
+
+  h += '<div class="btns grow">' +
+    '<button class="btn pri" data-act="nouvelle-depense">' + svg("plus",16,2) + 'Ajouter</button>' +
+    '<button class="btn" data-act="cloturer"' + (list.length ? "" : " disabled") + '>' +
+      svg("verrou",16) + 'Clôturer le mois</button></div>';
+
+  h += '<div class="sect"><h2>Le mois en cours</h2><div class="sp"></div>' +
+    (list.length ? '<span class="cnt">' + esc(fmt(tot)) + '</span>' : "") + '</div>';
+
+  if(!list.length){
+    h += '<div class="ops"><div class="vide"><b>Rien sur l\'ardoise</b>' +
+      'Ajoute une dépense, elle s\'inscrit à la date du jour — ou à celle que tu choisis.</div></div>';
+    return h;
+  }
+
+  h += '<div class="ops">';
+  grouper(list).forEach(g => {
+    h += '<div class="jour"><span>' + esc(relDate(g.date)) + '</span><span class="sp"></span>' +
+      '<span>' + esc(fmt(somme(g.items))) + '</span></div>';
+    g.items.forEach(d => { h += ligneDepense(d); });
+  });
+  h += '</div>';
+  return h;
+}
+
+/* ============================================================
+   HISTORIQUE
+   ============================================================ */
+function totalPeriode(pid){ return somme(dePeriode(pid)); }
+
+function vueHistorique(){
+  const l = periodesAll().sort((a,b) => (b.cloture||0) - (a.cloture||0));
+  const tot = l.reduce((s,p) => s + totalPeriode(p.id), 0);
+  const moy = l.length ? Math.round(tot / l.length) : 0;
+
+  let h = '<section class="total">' +
+    '<div class="total-lbl">Total historique</div>' +
+    '<span class="total-val num">' + esc(fmt(tot)) + '</span>' +
+    '<div class="total-bar"></div>' +
+    '<div class="total-sub"><span><b>' + l.length + '</b> ' + (l.length > 1 ? "mois clôturés" : "mois clôturé") + '</span>' +
+    (l.length ? '<span>moyenne <b>' + esc(fmt(moy)) + '</b></span>' : "") + '</div></section>';
+
+  h += '<div class="sect"><h2>Mois clôturés</h2></div>';
+  if(!l.length){
+    return h + '<div class="ops"><div class="vide"><b>Historique vide</b>' +
+      'Clôture le mois en cours depuis l\'accueil : il viendra se ranger ici.</div></div>';
+  }
+
+  h += '<div class="ops">';
+  l.forEach(p => {
+    const t = totalPeriode(p.id), n = dePeriode(p.id).length;
+    const e = etatBudget(t, p.budget);
+    const d = new Date((p.debut || todayISO()) + "T12:00:00");
+    h += '<button class="prow" data-act="ouvrir-periode" data-id="' + p.id + '">' +
+      '<span class="pemo">' + esc(MOIS[isNaN(d) ? 0 : d.getMonth()]) + '</span>' +
+      '<span class="pmid"><span class="pname">' + esc(p.titre) + '</span>' +
+      '<span class="psub">' + n + (n > 1 ? " dépenses" : " dépense") +
+      (p.budget ? " · budget " + esc(fmt(p.budget)) : "") + '</span></span>' +
+      '<span class="pbal num ' + (e ? CL[e] : "") + '">' + esc(fmt(t)) + '</span>' +
+      '<span class="pgo">' + svg("chev",16) + '</span></button>';
+  });
+  return h + '</div>';
+}
+
+function vuePeriode(p){
+  const list = dePeriode(p.id);
+  const tot = somme(list);
+  const e = etatBudget(tot, p.budget);
+
+  let h = '<div class="sheet"><div class="sheet-top">' +
+    '<button class="iconbtn" data-act="fermer-periode" aria-label="Retour">' + svg("fleche",18) + '</button>' +
+    '<div class="t">' + esc(p.titre) + '</div><div class="sp"></div>' +
+    '<button class="iconbtn" data-act="renommer-periode" data-id="' + p.id + '" aria-label="Renommer">' +
+      svg("crayon",17) + '</button></div><div class="sheet-in">';
+
+  h += '<section class="total">' +
+    '<div class="total-lbl">Total du mois</div>' +
+    '<span class="total-val num ' + (e ? CL[e] : "") + '">' + esc(fmt(tot)) + '</span>' +
+    blocBudget(tot, p.budget, true) +
+    '<div class="total-sub"><span><b>' + list.length + '</b> ' + (list.length > 1 ? "dépenses" : "dépense") + '</span>' +
+    '<span>du ' + esc(frDate(p.debut, true)) + ' au ' + esc(frDate(p.fin, true)) + '</span>' +
+    '<span>clôturé le ' + esc(quand(p.cloture)) + '</span></div></section>';
+
+  h += '<div class="sect"><h2>Détail</h2></div><div class="ops">';
+  grouper(list).forEach(g => {
+    h += '<div class="jour"><span>' + esc(frDate(g.date, true)) + '</span><span class="sp"></span>' +
+      '<span>' + esc(fmt(somme(g.items))) + '</span></div>';
+    g.items.forEach(d => {
+      h += '<div class="op"><span class="op-ic">' + svg("moins",15,2) + '</span>' +
+        '<span class="op-mid"><span class="op-lib">' + esc(libelleDe(d)) + '</span></span>' +
+        '<span class="op-mt">−' + fmt(d.montant) + '</span></div>';
+    });
+  });
+  h += '</div>';
+
+  h += '<div class="btns" style="margin-top:20px">' +
+    '<button class="btn" style="flex:1" data-act="rouvrir-periode" data-id="' + p.id + '">Rouvrir ce mois</button>' +
+    '<button class="btn dang" style="flex:0 0 auto" data-act="supprimer-periode" data-id="' + p.id + '">Supprimer</button></div>' +
+    '<div class="aide">Rouvrir remet ces dépenses sur l\'accueil et efface le mois de l\'historique.</div>';
+
+  return h + '</div></div>';
+}
+
+/* ============================================================
+   MODALES
+   ============================================================ */
+function champMontant(val){
+  return '<div class="champ"><label for="m-montant">Montant</label>' +
+    '<div class="mt-in"><input type="text" id="m-montant" inputmode="decimal" autocomplete="off" ' +
+      'placeholder="0,00" value="' + esc(val || "") + '"><span class="mt-eur">€</span></div></div>';
+}
+function boiteBoutons(valider, act){
+  return '<div class="btns" style="margin:20px 0 0">' +
+    '<button class="btn" style="flex:0 0 auto" data-act="fermer-modal">Renoncer</button>' +
+    '<button class="btn pri" style="flex:1" data-act="' + act + '">' + valider + '</button></div>';
+}
+
+function vueModal(m){
+  let c = "";
+  if(m.type === "depense"){
+    const dj = todayISO();
+    c = '<h3>' + (m.id ? "Modifier la dépense" : "Nouvelle dépense") + '</h3>' +
+      '<div class="sous">' + (m.id ? "Le montant, le libellé et la date restent modifiables."
+                                   : "La date du jour est déjà remplie.") + '</div>' +
+      champMontant(m.montant) +
+      '<div class="champ"><label for="m-lib">C\'est quoi ?</label>' +
+      '<input type="text" id="m-lib" autocomplete="off" placeholder="Courses, essence, resto…" value="' + esc(m.libelle||"") + '"></div>' +
+      '<div class="champ"><label for="m-date">Date</label>' +
+      '<input type="date" id="m-date" value="' + esc(m.date || dj) + '">' +
+      '<div class="raccourcis">' +
+        '<button data-act="date-rapide" data-id="0">aujourd\'hui</button>' +
+        '<button data-act="date-rapide" data-id="-1">hier</button>' +
+        '<button data-act="date-rapide" data-id="1">demain</button>' +
+        '<button data-act="date-rapide" data-id="7">dans 7 j</button>' +
+      '</div>' +
+      '<div class="aide">Une dépense datée plus tard reste comptée dans le total, signalée « à venir ».</div></div>' +
+      (m.id ? '<div class="btns" style="margin:16px 0 0"><button class="btn dang wide" data-act="supprimer-depense" data-id="' + m.id + '">Supprimer</button></div>' : "") +
+      boiteBoutons("Valider", m.id ? "depense-enregistrer" : "depense-creer");
+  }
+  else if(m.type === "budget"){
+    c = '<h3>Budget du mois</h3>' +
+      '<div class="sous">Le plafond que tu te fixes. Laisse vide pour n\'en avoir aucun : le total reste alors affiché en noir, sans jauge.</div>' +
+      champMontant(m.montant) +
+      '<div class="aide">Vert jusqu\'à 75 %, orange ensuite, rouge à partir de 95 %.</div>' +
+      boiteBoutons("Enregistrer", "budget-enregistrer");
+  }
+  else if(m.type === "cloture"){
+    const list = enCours();
+    const fut = futures(list);
+    const rep = !!m.reporter;
+    const dedans = rep ? list.length - fut.length : list.length;
+    const totDedans = somme(rep ? list.filter(d => fut.indexOf(d) === -1) : list);
+    c = '<h3>Clôturer le mois</h3>' +
+      '<div class="sous">Les dépenses en cours partent dans l\'historique et l\'accueil repart de zéro.</div>' +
+      '<div class="champ"><label for="m-titre">Nom du mois</label>' +
+      '<input type="text" id="m-titre" autocomplete="off" placeholder="' + esc(moisLong(todayISO())) + '" value="' + esc(m.titre || "") + '"></div>' +
+      (fut.length ?
+        '<button class="bascule' + (rep ? " on" : "") + '" data-act="bascule-report">' +
+        '<span class="l">Reporter les dépenses à venir' +
+        '<span class="d">' + fut.length + (fut.length > 1 ? " dépenses datées" : " dépense datée") +
+        ' après aujourd\'hui, pour ' + esc(fmt(somme(fut))) + '. Elles resteront sur l\'accueil.</span></span>' +
+        '<span class="k"></span></button>' : "") +
+      '<div class="aide">' + dedans + (dedans > 1 ? " dépenses clôturées" : " dépense clôturée") +
+      ', pour ' + esc(fmt(totDedans)) + '.</div>' +
+      '<div class="btns" style="margin:20px 0 0">' +
+      '<button class="btn" style="flex:0 0 auto" data-act="fermer-modal">Renoncer</button>' +
+      '<button class="btn pri" style="flex:1" data-act="cloture-ok"' + (dedans ? "" : " disabled") + '>Clôturer</button></div>';
+  }
+  else if(m.type === "renommer"){
+    c = '<h3>Renommer le mois</h3>' +
+      '<div class="champ"><label for="m-titre">Nom</label>' +
+      '<input type="text" id="m-titre" autocomplete="off" value="' + esc(m.titre||"") + '"></div>' +
+      boiteBoutons("Enregistrer", "renommer-ok");
+  }
+  else if(m.type === "supprimer-periode"){
+    c = '<h3>Supprimer « ' + esc(m.titre) + ' » ?</h3>' +
+      '<div class="sous">Le mois et ses dépenses disparaissent de l\'historique. Tu pourras annuler juste après.</div>' +
+      '<div class="btns" style="margin:20px 0 0">' +
+      '<button class="btn" style="flex:0 0 auto" data-act="fermer-modal">Renoncer</button>' +
+      '<button class="btn dang" style="flex:1" data-act="supprimer-periode-ok" data-id="' + m.id + '">Supprimer</button></div>';
+  }
+  else if(m.type === "effacer"){
+    c = '<h3>Tout effacer</h3>' +
+      '<div class="sous">Efface définitivement les dépenses et l\'historique de cet appareil.</div>' +
+      '<div class="champ"><label for="m-conf">Tape EFFACER pour confirmer</label>' +
+      '<input type="text" id="m-conf" autocomplete="off" placeholder="EFFACER"></div>' +
+      '<div class="btns" style="margin:20px 0 0">' +
+      '<button class="btn" style="flex:0 0 auto" data-act="fermer-modal">Renoncer</button>' +
+      '<button class="btn dang" style="flex:1" data-act="effacer-ok">Supprimer définitivement</button></div>';
+  }
+  return '<div class="mdl-bg" data-act="fermer-modal"><div class="mdl" data-act="rien">' + c + '</div></div>';
+}
+
+/* ============================================================
+   RÉGLAGES
+   ============================================================ */
+function ko(o){
+  if(o == null) return "?";
+  if(o > 1048576) return (o/1048576).toFixed(1) + " Mo";
+  if(o > 1024) return Math.round(o/1024) + " Ko";
+  return o + " o";
+}
+function vueReglages(){
+  const s = DB.settings;
+  const th = themeActuel(), acc = accentActuel();
+
+  let h = '<section class="total" style="padding:22px 0 14px">' +
+    '<div class="total-lbl">Réglages</div>' +
+    '<span class="total-val num" style="font-size:clamp(28px,8vw,34px)">Ardoise</span>' +
+    '<div class="total-sub"><span class="mono">v' + VERSION + '</span><span>schéma ' + SCHEMA + '</span></div></section>';
+
+  h += '<div class="bloc"><div class="bloc-h">Budget</div><div class="bloc-b">' +
+    '<div class="lig"><div class="l">Budget du mois<div class="d">' +
+      (budget() ? "Jauge et couleurs actives." : "Aucun budget : total en noir, sans jauge.") +
+    '</div></div><button class="btn" data-act="modifier-budget">' +
+      (budget() ? esc(fmt(budget())) : "Définir") + '</button></div>' +
+    (budget() ? '<div class="lig"><div class="l">Retirer le budget<div class="d">Le total redevient neutre.</div></div>' +
+      '<button class="btn dang" data-act="retirer-budget">Retirer</button></div>' : "") +
+    '</div></div>';
+
+  h += '<div class="bloc"><div class="bloc-h">Apparence</div><div class="bloc-b">' +
+    '<div class="lig"><div class="l">Thème</div><div class="seg">' +
+      THEMES.map(([k,l]) => '<button class="' + (th === k ? "on" : "") + '" data-act="theme" data-id="' + k + '">' + l + '</button>').join("") +
+    '</div></div>' +
+    '<div class="lig" style="align-items:flex-start"><div class="l">Couleur d\'accent' +
+      '<div class="d">Une seule couleur porte l\'interface.</div></div></div>' +
+    '<div class="pastilles" style="margin-top:2px">' +
+      ACCENTS.map(([hex,nom]) => '<button class="past ' + (acc === hex ? "on" : "") + '" ' +
+        'style="background:' + hex + '" data-act="accent" data-id="' + hex + '" title="' + nom + '" aria-label="' + nom + '"></button>').join("") +
+    '</div>' +
+    '<div class="apercu">' + icoSVG(36) +
+      '<div class="d" style="font-size:12px;color:var(--gris)">L\'icône prend la couleur choisie. Un raccourci déjà posé sur l\'écran d\'accueil garde son ancienne image : retire-le et rajoute-le pour la rafraîchir.</div>' +
+    '</div></div></div>';
+
+  const q = state.quota;
+  h += '<div class="bloc"><div class="bloc-h">Données</div><div class="bloc-b">' +
+    '<div class="lig"><div class="l">Sauvegarde<div class="d">Un fichier JSON, à ranger où tu veux.</div></div>' +
+      '<button class="btn" data-act="exporter">Exporter</button></div>' +
+    '<div class="lig"><div class="l">Restaurer<div class="d">Ajoute ce qui manque, n\'écrase rien.</div></div>' +
+      '<button class="btn" data-act="importer">Importer</button></div>' +
+    '<div class="lig"><div class="l">Contenu<div class="d">' +
+      depensesAll().length + (depensesAll().length > 1 ? " dépenses · " : " dépense · ") +
+      periodesAll().length + " mois" +
+      '</div></div><span class="mono" style="font-size:12px;color:var(--gris)">' +
+      (DB.meta.exporte ? "export " + esc(quand(DB.meta.exporte)) : "jamais exporté") + '</span></div>' +
+    (q && q.usage != null ? '<div class="lig" style="display:block"><div class="l">Espace utilisé<div class="d">' +
+      ko(q.usage) + ' sur ' + ko(q.quota) + '</div></div><div class="barre"><i style="width:' +
+      Math.min(100, Math.round((q.usage/(q.quota||1))*100)) + '%"></i></div></div>' : "") +
+    '<div class="lig"><div class="l">Tout effacer<div class="d">Définitif, sans retour.</div></div>' +
+      '<button class="btn dang" data-act="effacer">Effacer</button></div>' +
+    '</div></div>';
+
+  h += '<div class="bloc"><div class="bloc-h">Nouveautés' +
+    '<div style="margin-left:auto"><button class="btn" style="padding:6px 10px;font-size:13px" data-act="basculer-journal">' +
+    (state.journal ? "Réduire" : "Voir") + '</button></div></div>';
+  if(state.journal){
+    h += '<div class="bloc-b">' + JOURNAL.map(j =>
+      '<div class="jrn"><div class="jrn-h"><span class="jrn-v">v' + j.v + '</span>' +
+      '<span class="jrn-d">' + esc(frDate(j.d, true)) + '</span><span class="jrn-t">' + esc(j.t) + '</span></div>' +
+      '<ul>' + j.l.map(x => '<li>' + esc(x) + '</li>').join("") + '</ul></div>').join("") + '</div>';
+  }
+  h += '</div>';
+
+  h += '<div class="aide" style="text-align:center;margin:18px 0 0">' +
+    'Tout reste sur cet appareil. Rien ne part sur un serveur.</div>';
+  return h;
+}
+
+/* ============================================================
+   ACTIONS
+   ============================================================ */
+function ouvrirModal(m){ state.modal = m; render(); }
+function fermerModal(){ state.modal = null; render(); }
+
+function lireDepenseModal(){
+  const montant = cents(($("#m-montant") || {}).value);
+  const libelle = (($("#m-lib") || {}).value || "").trim();
+  const date = (($("#m-date") || {}).value || "").trim() || todayISO();
+  return { montant, libelle, date };
+}
+
+document.addEventListener("click", async ev => {
+  const el = ev.target.closest("[data-act]");
+  if(!el) return;
+  const act = el.dataset.act, id = el.dataset.id;
+  if(act === "rien"){ ev.stopPropagation(); return; }
+
+  /* ---- navigation ---- */
+  if(act === "tab"){ state.tab = id; render(); window.scrollTo(0,0); return; }
+  if(act === "ouvrir-periode"){ state.periode = id; render(); return; }
+  if(act === "fermer-periode"){ state.periode = null; render(); return; }
+  if(act === "fermer-modal"){ fermerModal(); return; }
+  if(act === "basculer-journal"){ state.journal = !state.journal; state.neuf = false; DB.meta.vue = VERSION; sauver(true); render(); return; }
+  if(act === "journal-ouvrir"){
+    state.tab = "reglages"; state.journal = true; state.neuf = false;
+    DB.meta.vue = VERSION; sauver(true); render(); window.scrollTo(0,0); return;
+  }
+
+  /* ---- annulation ---- */
+  if(act === "annuler-suppr"){
+    if(corbeille){ restaurerPaquet(corbeille); corbeille = null; toast("Restauré"); render(); }
+    fermerToast(); return;
+  }
+
+  /* ---- dépenses ---- */
+  if(act === "nouvelle-depense"){
+    ouvrirModal({ type:"depense", date:todayISO(), focus:"m-montant" });
+    return;
+  }
+  if(act === "modifier-depense"){
+    const d = DB.depenses[id];
+    if(d) ouvrirModal({ type:"depense", id:d.id, montant:brut(d.montant), libelle:d.libelle, date:d.date, focus:"m-montant" });
+    return;
+  }
+  if(act === "date-rapide"){
+    const champ = $("#m-date");
+    if(champ){
+      const base = new Date(todayISO() + "T12:00:00");
+      base.setDate(base.getDate() + parseInt(id,10));
+      champ.value = base.getFullYear()+"-"+p2(base.getMonth()+1)+"-"+p2(base.getDate());
+    }
+    return;
+  }
+  if(act === "depense-creer" || act === "depense-enregistrer"){
+    const v = lireDepenseModal();
+    if(v.montant <= 0){ toast("Il manque le montant"); const c = $("#m-montant"); if(c) c.focus(); return; }
+    if(act === "depense-creer"){
+      creerDepense(v);
+      fermerModal();
+      toast("Dépense ajoutée");
+    }else{
+      const d = DB.depenses[state.modal.id];
+      if(d){ d.montant = v.montant; d.libelle = v.libelle; d.date = v.date; sauverDepense(d); }
+      fermerModal();
+      toast("Dépense modifiée");
+    }
+    return;
+  }
+  if(act === "supprimer-depense"){
+    const d = DB.depenses[id];
+    if(!d) return;
+    corbeille = { depenses:[JSON.parse(JSON.stringify(d))], periodes:[] };
+    supprimerDepenseDB(id);
+    fermerModal();
+    toast("Dépense supprimée", "annuler-suppr");
+    return;
+  }
+
+  /* ---- budget ---- */
+  if(act === "modifier-budget"){
+    ouvrirModal({ type:"budget", montant: budget() ? brut(budget()) : "", focus:"m-montant" });
+    return;
+  }
+  if(act === "budget-enregistrer"){
+    const v = cents(($("#m-montant") || {}).value);
+    DB.settings.budget = v > 0 ? v : 0;
+    sauver(); fermerModal();
+    toast(v > 0 ? "Budget fixé à " + fmt(v) : "Budget retiré");
+    return;
+  }
+  if(act === "retirer-budget"){
+    DB.settings.budget = 0; sauver(); render(); toast("Budget retiré"); return;
+  }
+
+  /* ---- clôture ---- */
+  if(act === "cloturer"){
+    if(!enCours().length){ toast("Rien à clôturer"); return; }
+    ouvrirModal({ type:"cloture", titre:"", reporter:!!DB.settings.reporterFuturs });
+    return;
+  }
+  if(act === "bascule-report"){
+    state.modal.titre = (($("#m-titre") || {}).value || "");
+    state.modal.reporter = !state.modal.reporter;
+    DB.settings.reporterFuturs = state.modal.reporter;
+    sauver(true);
+    render();
+    return;
+  }
+  if(act === "cloture-ok"){
+    const titre = (($("#m-titre") || {}).value || "").trim();
+    const r = cloturer(titre, !!state.modal.reporter);
+    fermerModal();
+    if(!r){ toast("Rien à clôturer"); return; }
+    toast(r.nb + (r.nb > 1 ? " dépenses clôturées" : " dépense clôturée") +
+          (r.reportees ? ", " + r.reportees + (r.reportees > 1 ? " reportées" : " reportée") : ""));
+    render();
+    return;
+  }
+
+  /* ---- mois de l'historique ---- */
+  if(act === "renommer-periode"){
+    const p = DB.periodes[id];
+    if(p) ouvrirModal({ type:"renommer", id:p.id, titre:p.titre, focus:"m-titre" });
+    return;
+  }
+  if(act === "renommer-ok"){
+    const p = DB.periodes[state.modal.id];
+    const t = (($("#m-titre") || {}).value || "").trim();
+    if(p && t){ p.titre = t; sauverPeriode(p); }
+    fermerModal();
+    return;
+  }
+  if(act === "rouvrir-periode"){
+    const p = DB.periodes[id];
+    if(!p) return;
+    rouvrir(id);
+    state.periode = null; state.tab = "accueil";
+    render(); window.scrollTo(0,0);
+    toast("« " + p.titre + " » rouvert");
+    return;
+  }
+  if(act === "supprimer-periode"){
+    const p = DB.periodes[id];
+    if(p) ouvrirModal({ type:"supprimer-periode", id:p.id, titre:p.titre });
+    return;
+  }
+  if(act === "supprimer-periode-ok"){
+    const p = DB.periodes[id];
+    if(!p) return;
+    corbeille = { periodes:[JSON.parse(JSON.stringify(p))],
+                  depenses:dePeriode(id).map(d => JSON.parse(JSON.stringify(d))) };
+    supprimerPeriode(id);
+    state.periode = null;
+    fermerModal();
+    toast("Mois supprimé", "annuler-suppr");
+    return;
+  }
+
+  /* ---- apparence ---- */
+  if(act === "theme"){
+    ecritLS(LSTHEME, id); appliquerTheme(id);
+    DB.settings.theme = id; sauver(true); majIcone(); render(); return;
+  }
+  if(act === "accent"){
+    ecritLS(LSACC, id); appliquerAccent(id);
+    DB.settings.accent = id; sauver(true); majIcone(); render(); return;
+  }
+
+  /* ---- données ---- */
+  if(act === "exporter"){ exporterJSON(); return; }
+  if(act === "importer"){
+    const inp = document.createElement("input");
+    inp.type = "file"; inp.accept = "application/json,.json";
+    inp.onchange = () => { if(inp.files && inp.files[0]) importerFichier(inp.files[0]); };
+    inp.click();
+    return;
+  }
+  if(act === "effacer"){ ouvrirModal({ type:"effacer", focus:"m-conf" }); return; }
+  if(act === "effacer-ok"){
+    const v = (($("#m-conf") || {}).value || "").trim().toUpperCase();
+    if(v !== "EFFACER"){ toast("Tape EFFACER pour confirmer"); return; }
+    try{ await IDB.vider(); }catch(e){}
+    DB = JSON.parse(JSON.stringify(DEFAULTS));
+    DB.settings.theme = themeActuel(); DB.settings.accent = accentActuel();
+    corbeille = null;
+    state.periode = null; state.tab = "accueil";
+    fermerModal();
+    toast("Tout est effacé");
+    return;
+  }
+});
+
+/* Entrée valide la modale ouverte : saisir un montant puis appuyer sur Entrée
+   doit suffire, sans viser le bouton. */
+document.addEventListener("keydown", ev => {
+  if(ev.key === "Escape"){
+    if(state.modal){ fermerModal(); return; }
+    if(state.periode){ state.periode = null; render(); return; }
+  }
+  if(ev.key !== "Enter" || !state.modal) return;
+  const t = ev.target;
+  if(t && t.tagName === "TEXTAREA") return;
+  const b = document.querySelector('.mdl .btn.pri[data-act]');
+  if(b && !b.disabled){ ev.preventDefault(); b.click(); }
+});
+
+/* ============================================================
+   IMPORT / EXPORT
+   ============================================================ */
+function contenuSauvegarde(){
+  return JSON.stringify({ app:"ardoise", appVersion:VERSION, schema:SCHEMA,
+    depenses:DB.depenses, periodes:DB.periodes, settings:DB.settings, meta:DB.meta }, null, 2);
+}
+function telecharger(nom, blob){
+  const u = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = u; a.download = nom;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(u), 4000);
+}
+function exporterJSON(){
+  const d = new Date();
+  const nom = "ardoise-" + d.getFullYear() + p2(d.getMonth()+1) + p2(d.getDate()) + ".json";
+  telecharger(nom, new Blob([contenuSauvegarde()], { type:"application/json" }));
+  DB.meta.exporte = Date.now(); sauver(true); render();
+  toast("Sauvegarde exportée");
+}
+async function importerFichier(f){
+  try{
+    const x = JSON.parse(await f.text());
+    const r = fusionnerSauvegarde(x);
+    render();
+    toast(r.nd + (r.nd > 1 ? " dépenses" : " dépense") + " et " + r.np + " mois ajoutés");
+  }catch(e){
+    toast("Fichier illisible : " + ((e && e.message) || e));
+  }
+}
+
+/* ============================================================
+   ICÔNE ET MANIFESTE, PEINTS À LA COULEUR D'ACCENT
+   ============================================================ */
+function dessinerIcone(taille, marge){
+  const c = document.createElement("canvas");
+  c.width = c.height = taille;
+  const x = c.getContext("2d");
+  const acc = accentActuel();
+  // « maskable » : Android rogne l'icône en cercle ou en écusson selon le
+  // téléphone. On peint alors tout le carré et on garde le sigle au centre,
+  // à l'abri du rognage. Sinon, carré aux angles arrondis.
+  const p = marge ? taille * 0.12 : 0;
+  const t = taille - p * 2, r = t * 0.22;
+  x.fillStyle = acc;
+  if(marge) x.fillRect(0, 0, taille, taille);
+  else{
+    x.beginPath();
+    x.moveTo(r, 0); x.arcTo(t, 0, t, t, r); x.arcTo(t, t, 0, t, r);
+    x.arcTo(0, t, 0, 0, r); x.arcTo(0, 0, t, 0, r); x.closePath();
+    x.fill();
+  }
+  const u = t / 64, o = p;
+  x.strokeStyle = surAccent(acc);  // sur un accent clair, un trait blanc disparaîtrait
+  x.lineCap = "round"; x.lineWidth = 5 * u;
+  [22, 32, 42].forEach(bx => {
+    x.beginPath();
+    x.moveTo(o + bx*u, o + 20*u); x.lineTo(o + bx*u, o + 44*u);
+    x.stroke();
+  });
+  x.beginPath();
+  x.moveTo(o + 17*u, o + 46*u); x.lineTo(o + 47*u, o + 18*u);
+  x.stroke();
+  return c.toDataURL("image/png");
+}
+let _manifeste = null;
+function majIcone(){
+  try{
+    const acc = accentActuel(), sur = surAccent(acc);
+    const fav = document.getElementById("favicon");
+    if(fav) fav.href = "data:image/svg+xml," + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' +
+      '<rect width="64" height="64" rx="14" fill="' + acc + '"/>' +
+      '<path d="M22 20v24M32 20v24M42 20v24M17 46 47 18" fill="none" stroke="' + sur + '" ' +
+      'stroke-width="5" stroke-linecap="round"/></svg>');
+
+    const p192 = dessinerIcone(192, false), p512 = dessinerIcone(512, false), pm = dessinerIcone(512, true);
+    let at = document.querySelector('link[rel="apple-touch-icon"]');
+    if(!at){ at = document.createElement("link"); at.rel = "apple-touch-icon"; document.head.appendChild(at); }
+    at.href = p192;
+
+    const man = {
+      id:"ardoise", name:"Ardoise", short_name:"Ardoise", start_url:".", scope:".",
+      display:"standalone", orientation:"portrait",
+      background_color: themeActuel() === "sombre" ? "#0d0d10" : "#ffffff",
+      theme_color: themeActuel() === "sombre" ? "#0d0d10" : "#ffffff",
+      icons:[ { src:p192, sizes:"192x192", type:"image/png" },
+              { src:p512, sizes:"512x512", type:"image/png" },
+              { src:pm,  sizes:"512x512", type:"image/png", purpose:"maskable" } ]
+    };
+    if(_manifeste) URL.revokeObjectURL(_manifeste);
+    _manifeste = URL.createObjectURL(new Blob([JSON.stringify(man)], { type:"application/manifest+json" }));
+    let lm = document.querySelector('link[rel="manifest"]');
+    if(!lm){ lm = document.createElement("link"); lm.rel = "manifest"; document.head.appendChild(lm); }
+    lm.href = _manifeste;
+  }catch(e){ /* une icône ratée ne doit pas empêcher l'application de tourner */ }
+}
+
+/* ---------- espace disque ---------- */
+async function majQuota(){
+  if(!navigator.storage || !navigator.storage.estimate) return;
+  try{
+    state.quota = await navigator.storage.estimate();
+    if(pret && state.tab === "reglages") render();
+  }catch(e){}
+}
+
+/* ============================================================
+   DÉMARRAGE
+   ============================================================ */
+async function demarrer(){
+  try{
+    await IDB.ouvrir();
+    DB = assembler(await IDB.tout());
+  }catch(e){
+    document.getElementById("view").innerHTML =
+      '<div class="vide" style="margin-top:60px"><b>Stockage indisponible</b>' +
+      esc(String((e && e.message) || e)) + '<br>La navigation privée de certains navigateurs interdit IndexedDB.</div>';
+    return;
+  }
+  pret = true;
+
+  // Le thème et l'accent sont lus depuis localStorage avant tout rendu ; une
+  // sauvegarde restaurée peut en apporter d'autres, on les applique ici.
+  if(!litLS(LSTHEME) && DB.settings.theme){ ecritLS(LSTHEME, DB.settings.theme); appliquerTheme(DB.settings.theme); }
+  if(!litLS(LSACC) && DB.settings.accent){ ecritLS(LSACC, DB.settings.accent); appliquerAccent(DB.settings.accent); }
+  DB.settings.theme = themeActuel();
+  DB.settings.accent = accentActuel();
+
+  state.neuf = DB.meta.vue !== VERSION;
+  render();
+  majIcone();
+  majQuota();
+}
+
+/* Un téléphone rouvert le lendemain doit reclasser « aujourd'hui » et
+   « à venir » sans qu'on ait besoin de recharger la page. */
+let _jour = todayISO();
+document.addEventListener("visibilitychange", () => {
+  if(document.visibilityState !== "visible" || !pret) return;
+  if(_jour !== todayISO()){ _jour = todayISO(); render(); }
+});
+window.addEventListener("pagehide", () => { ecouler(); });
+
+demarrer();
+</script>
+</body>
+</html>

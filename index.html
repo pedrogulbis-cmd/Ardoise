@@ -117,6 +117,14 @@ nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--voil
 .op-met{display:block;font-size:11.5px;color:var(--gris2);margin-top:2px;
   font-family:"IBM Plex Mono",monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .op-mt{font-family:"IBM Plex Mono",monospace;font-size:14px;font-weight:500;white-space:nowrap;padding-top:2px}
+.op-ic.rev{background:var(--okF);color:var(--ok)}
+.op-mt.rev{color:var(--ok)}
+.op-note{display:block;font-size:11.5px;color:var(--gris);margin-top:3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-style:italic}
+.badge.rec{text-transform:none;border-style:dashed;color:var(--acc);border-color:var(--accB)}
+.avert{border:1px solid var(--dangF);background:var(--dangF);color:var(--dang);
+  border-radius:10px;padding:11px 12px;font-size:13px;margin:12px 0;line-height:1.5}
+.avert b{font-weight:600}
 .op.prev{opacity:.72}
 .op.prev .op-ic{border:1px dashed var(--trait);background:transparent;color:var(--gris)}
 .op.prev .op-mt{font-style:italic}
@@ -214,6 +222,7 @@ input[type=text],input[type=date],input[type=number],select,textarea{
 select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4.5 6 8.5l4-4' fill='none' stroke='%2371717a' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
 input:focus,select:focus,textarea:focus{outline:2px solid var(--acc);outline-offset:1px;border-color:transparent}
+textarea{resize:vertical;min-height:44px;line-height:1.45;font-family:inherit}
 .mt-in{display:flex;align-items:center;gap:9px}
 .mt-in input{font-size:26px;font-weight:600;letter-spacing:-.03em;padding:12px;
   font-variant-numeric:tabular-nums;text-align:right}
@@ -308,9 +317,19 @@ html[data-theme="sombre"] .seg button.on{background:var(--texte);color:#0d0d10}
    Un seul fichier, aucune dépendance, stockage local (IndexedDB).
    ============================================================ */
 
-const VERSION = "1.1.0";
-const SCHEMA  = 1;
+const VERSION = "1.2.0";
+const SCHEMA  = 2;
 const JOURNAL = [
+  { v:"1.2.0", d:"2026-09-03", t:"Revenus, notes et récurrences", l:[
+    "Une entrée peut être un revenu : l'interrupteur est dans la fenêtre d'ajout, la dépense reste le choix par défaut.",
+    "Les revenus ne sont jamais mêlés aux dépenses dans les totaux ni dans la moyenne de l'historique : ils sont comptés à part, avec le net affiché à côté.",
+    "Une note facultative accompagne chaque entrée. Elle apparaît sous le libellé et la recherche la fouille.",
+    "Récurrence : mensuelle sans fin pour un abonnement, ou en un nombre d'échéances pour un paiement en plusieurs fois. La suivante est créée à la clôture du mois.",
+    "La clôture propose le mois dominant des dépenses en majuscule — « Septembre 2026 ».",
+    "Annuler une clôture ramène le mois sur l'accueil et retire les échéances qu'elle avait engendrées, avec un avertissement sur ce qui s'y trouve déjà.",
+    "Une entrée peut être dupliquée depuis sa fenêtre de modification.",
+    "L'accueil se trie par date ou par montant."
+  ]},
   { v:"1.1.0", d:"2026-09-03", t:"Analyse", l:[
     "Un quatrième onglet : la recherche et les totaux. Taper « pokémon » donne le total dépensé sur ce libellé, toutes périodes confondues, mois en cours et mois clôturés compris.",
     "La recherche ignore les accents et la casse : « pokemon » trouve « Pokémon ».",
@@ -409,11 +428,6 @@ function frDate(iso, avecAn){
   const an = (avecAn || d.getFullYear() !== new Date().getFullYear()) ? " " + d.getFullYear() : "";
   return d.getDate() + " " + MOIS[d.getMonth()] + an;
 }
-function moisLong(iso){
-  const d = new Date(iso + "T12:00:00");
-  if(isNaN(d)) return iso;
-  return MOIS_LONG[d.getMonth()] + " " + d.getFullYear();
-}
 function relDate(iso){
   const a = new Date(iso+"T12:00:00"), b = new Date(todayISO()+"T12:00:00");
   const j = Math.round((a-b)/86400000);
@@ -423,6 +437,18 @@ function relDate(iso){
   if(j > 1 && j < 7) return JOURS[a.getDay()] + " " + frDate(iso);
   return frDate(iso);
 }
+/* Ajoute des mois en gardant le jour, ramené au dernier jour du mois quand il
+   n'existe pas : le 31 janvier devient le 28 février, pas le 3 mars. */
+function plusMois(iso, n){
+  const d = new Date(iso + "T12:00:00");
+  const jour = d.getDate();
+  const cible = new Date(d.getFullYear(), d.getMonth() + n, 1);
+  const dernier = new Date(cible.getFullYear(), cible.getMonth()+1, 0).getDate();
+  cible.setDate(Math.min(jour, dernier));
+  return cible.getFullYear()+"-"+p2(cible.getMonth()+1)+"-"+p2(cible.getDate());
+}
+const cap = s => String(s||"").charAt(0).toUpperCase() + String(s||"").slice(1);
+
 function quand(ts){
   if(!ts) return "—";
   const d = new Date(ts);
@@ -483,7 +509,7 @@ function svg(n, t, sw){
 const DEFAULTS = {
   version:SCHEMA, depenses:{}, periodes:{},
   settings:{ theme:"clair", accent:ACCENTS[0][0], budget:0, reporterFuturs:true,
-             aPortee:"tout", aPeriode:"tout", aTri:"recent" },
+             accTri:"recent", aPortee:"tout", aPeriode:"tout", aTri:"recent", aSens:"tout" },
   meta:{ cree:Date.now(), modifie:0, exporte:0, vue:null }
 };
 let DB = JSON.parse(JSON.stringify(DEFAULTS));
@@ -603,15 +629,21 @@ function fusionnerSauvegarde(x){
 
 /* ============================================================
    MODÈLE
-   Une dépense porte un montant en centimes, un libellé, une date, et le mois
-   qui l'a absorbée (vide tant qu'elle est en cours). Aucun total n'est stocké :
-   tout se recalcule, donc rien ne peut diverger.
+   Une entrée porte un montant en centimes, un sens — dépense ou revenu —, un
+   libellé, une note facultative, une date, une récurrence éventuelle, et le
+   mois qui l'a absorbée (vide tant qu'elle est en cours). Aucun total n'est
+   stocké : tout se recalcule, donc rien ne peut diverger.
    ============================================================ */
 const depensesAll = () => Object.values(DB.depenses);
 const periodesAll = () => Object.values(DB.periodes);
 const enCours  = () => depensesAll().filter(d => !d.periode);
 const dePeriode = pid => depensesAll().filter(d => d.periode === pid);
-const somme = l => l.reduce((s,d) => s + (d.montant||0), 0);
+/* Une entrée d'avant les revenus n'a pas de champ « sens » : elle est une
+   dépense, comme elle l'a toujours été. */
+const estRevenu = d => d.sens === "revenu";
+const somme    = l => l.reduce((s,d) => s + (d.montant||0), 0);
+const sommeDep = l => somme(l.filter(d => !estRevenu(d)));
+const sommeRev = l => somme(l.filter(estRevenu));
 const futures = l => l.filter(d => d.date > todayISO());
 const budget = () => DB.settings.budget || 0;
 
@@ -621,9 +653,18 @@ function trier(l){
   return l.slice().sort((a,b) => (a.date === b.date ? (b.cree||0) - (a.cree||0) : (a.date < b.date ? 1 : -1)));
 }
 function grouper(l){
+  return grouperTri(l, "recent");
+}
+/* Les tris par montant cassent le regroupement par jour : une liste rangée du
+   plus cher au moins cher n'a plus de journées contiguës à coiffer. On la rend
+   alors à plat, chaque ligne portant sa date. */
+function grouperTri(l, mode){
+  const ordre = mode === "ancien"
+    ? l.slice().sort((a,b) => (a.date === b.date ? (a.cree||0)-(b.cree||0) : (a.date < b.date ? -1 : 1)))
+    : trier(l);
   const g = [];
   let cle = null, cur = null;
-  trier(l).forEach(d => {
+  ordre.forEach(d => {
     if(d.date !== cle){ cle = d.date; cur = { date:cle, items:[] }; g.push(cur); }
     cur.items.push(d);
   });
@@ -663,18 +704,24 @@ function debutPeriode(f){
   else if(f === "annee") return d.getFullYear() + "-01-01";
   return d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate());
 }
-function chercher(q, portee, periode){
+function chercher(q, portee, periode, sens){
   const n = norm(q);
   const dep = debutPeriode(periode);
   return depensesAll().filter(d => {
     if(portee === "cours" && d.periode) return false;
     if(portee === "clos"  && !d.periode) return false;
+    if(sens === "dep" && estRevenu(d)) return false;
+    if(sens === "rev" && !estRevenu(d)) return false;
     if(dep && d.date < dep) return false;
     if(!n) return true;
-    // Le nom du mois de clôture est cherché aussi : « août » retrouve tout ce
-    // qui a été clôturé sous ce nom, même sans le mot dans le libellé.
+    // La note est fouillée au même titre que le libellé : c'est là qu'on range
+    // le détail qu'on ne veut pas voir dans la liste.
+    // Le nom du mois de clôture compte aussi : « août » retrouve tout ce qui a
+    // été clôturé sous ce nom, même sans le mot dans le libellé.
     const p = d.periode && DB.periodes[d.periode];
-    return norm(d.libelle).indexOf(n) !== -1 || (p && norm(p.titre).indexOf(n) !== -1);
+    return norm(d.libelle).indexOf(n) !== -1 ||
+           norm(d.note).indexOf(n) !== -1 ||
+           (p && norm(p.titre).indexOf(n) !== -1);
   });
 }
 function trierAnalyse(l, mode){
@@ -710,13 +757,50 @@ function parMois(l){
 
 function creerDepense(o){
   const d = { id:uid(), montant:o.montant, libelle:(o.libelle||"").trim(),
-              date:o.date || todayISO(), periode:"", cree:Date.now() };
+              note:(o.note||"").trim(), sens:o.sens === "revenu" ? "revenu" : "depense",
+              date:o.date || todayISO(), rec:o.rec || null, issuDe:o.issuDe || "",
+              periode:"", cree:Date.now() };
   DB.depenses[d.id] = d; sauverDepense(d);
   return d;
 }
-function libelleDe(d){ return (d.libelle || "").trim() || "Dépense"; }
+function libelleDe(d){ return (d.libelle || "").trim() || (estRevenu(d) ? "Revenu" : "Dépense"); }
+/* Ce qu'affiche le badge d'une récurrence : « 2/3 » pour un paiement en
+   plusieurs fois, « tous les mois » pour un abonnement sans fin. */
+function libelleRec(r){
+  if(!r) return "";
+  return r.mode === "fois" ? (r.index || 1) + "/" + (r.total || 1) : "tous les mois";
+}
 
-/* Clôture : chaque dépense en cours reçoit l'identifiant du mois, ce qui la
+/* Le mois que la clôture propose : celui où tombe le plus de dépenses, et non
+   la date du jour — on clôture souvent septembre le 2 octobre. */
+function moisDominant(l){
+  const c = new Map();
+  l.forEach(d => { const k = cleMois(d.date); c.set(k, (c.get(k)||0) + 1); });
+  let best = cleMois(todayISO()), n = -1;
+  c.forEach((v,k) => { if(v > n || (v === n && k > best)){ n = v; best = k; } });
+  return best;
+}
+/* Une récurrence engendre son échéance suivante au moment de la clôture : le
+   mois se referme, le suivant s'ouvre déjà garni. Rien n'est créé d'avance,
+   donc rien ne se dédouble si on clôture deux fois. */
+function propagerRecurrences(list, pid){
+  let n = 0;
+  list.forEach(d => {
+    const r = d.rec;
+    if(!r) return;
+    if(r.mode === "fois" && (r.index || 1) >= (r.total || 1)) return;
+    creerDepense({
+      montant:d.montant, libelle:d.libelle, note:d.note, sens:d.sens,
+      date:plusMois(d.date, 1), issuDe:pid,
+      rec: r.mode === "fois" ? { mode:"fois", total:r.total, index:(r.index||1) + 1 }
+                             : { mode:"mensuel" }
+    });
+    n++;
+  });
+  return n;
+}
+
+/* Clôture : chaque entrée en cours reçoit l'identifiant du mois, ce qui la
    retire de l'accueil sans l'effacer. Rien n'est recopié, rien n'est perdu. */
 function cloturer(titre, reporter){
   const list = enCours();
@@ -724,13 +808,21 @@ function cloturer(titre, reporter){
   const dedans = list.filter(d => reportees.indexOf(d) === -1);
   if(!dedans.length) return null;
   const dates = dedans.map(d => d.date).sort();
-  const p = { id:uid(), titre:(titre||"").trim() || moisLong(todayISO()),
+  const p = { id:uid(), titre:(titre||"").trim() || cap(libelleMois(moisDominant(dedans))),
               cloture:Date.now(), budget:budget(), debut:dates[0], fin:dates[dates.length-1] };
   DB.periodes[p.id] = p; sauverPeriode(p);
   dedans.forEach(d => { d.periode = p.id; sauverDepense(d); });
-  return { p, nb:dedans.length, reportees:reportees.length };
+  const rec = propagerRecurrences(dedans, p.id);
+  return { p, nb:dedans.length, reportees:reportees.length, rec };
+}
+/* Annuler une clôture, c'est la défaire entièrement : les entrées reviennent
+   sur l'accueil et les échéances que la clôture avait engendrées repartent,
+   sans quoi une récurrence se dédoublerait à chaque aller-retour. */
+function echeancesEngendrees(pid){
+  return depensesAll().filter(d => d.issuDe === pid && !d.periode);
 }
 function rouvrir(pid){
+  echeancesEngendrees(pid).forEach(d => supprimerDepenseDB(d.id));
   dePeriode(pid).forEach(d => { d.periode = ""; sauverDepense(d); });
   supprimerPeriodeDB(pid);
 }
@@ -817,13 +909,17 @@ function dessiner(){
    seule question qu'on se pose en ouvrant l'application.
    ============================================================ */
 function ligneDepense(d){
+  const rev = estRevenu(d);
   const prev = d.date > todayISO();
+  const note = (d.note || "").trim();
   return '<button class="op' + (prev ? " prev" : "") + '" data-act="modifier-depense" data-id="' + d.id + '">' +
-    '<span class="op-ic">' + svg(prev ? "horloge" : "moins", 15, 2) + '</span>' +
+    '<span class="op-ic' + (rev ? " rev" : "") + '">' + svg(prev ? "horloge" : (rev ? "plus" : "moins"), 15, 2) + '</span>' +
     '<span class="op-mid"><span class="op-lib">' + esc(libelleDe(d)) +
+      (d.rec ? '<span class="badge rec">' + esc(libelleRec(d.rec)) + '</span>' : "") +
       (prev ? '<span class="tagprev">à venir</span>' : "") + '</span>' +
-    '<span class="op-met">' + esc(relDate(d.date)) + '</span></span>' +
-    '<span class="op-mt">−' + fmt(d.montant) + '</span></button>';
+    '<span class="op-met">' + esc(relDate(d.date)) + '</span>' +
+    (note ? '<span class="op-note">' + esc(note) + '</span>' : "") + '</span>' +
+    '<span class="op-mt' + (rev ? " rev" : "") + '">' + (rev ? "+" : "−") + fmt(d.montant) + '</span></button>';
 }
 
 function blocBudget(tot, b, compact){
@@ -841,13 +937,17 @@ function blocBudget(tot, b, compact){
     '</div><div class="bud-b"><i class="' + e + '" style="width:' + pc + '%"></i></div></div>';
 }
 
+const TRIS_ACC = [["recent","Récent"],["ancien","Ancien"],["montant","Montant ↓"],["montantA","Montant ↑"]];
+
 function vueAccueil(){
   const list = enCours();
-  const tot = somme(list);
+  const tot = sommeDep(list);
+  const rev = sommeRev(list);
   const b = budget();
   const e = etatBudget(tot, b);
   const fut = futures(list);
-  const totFut = somme(fut);
+  const totFut = sommeDep(fut);
+  const mode = DB.settings.accTri || "recent";
 
   let h = '<section class="total">' +
     '<div class="total-lbl">Dépenses en cours</div>' +
@@ -855,8 +955,10 @@ function vueAccueil(){
     blocBudget(tot, b, false);
 
   const sub = [];
-  sub.push('<span><b>' + list.length + '</b> ' + (list.length > 1 ? "dépenses" : "dépense") + '</span>');
-  if(fut.length) sub.push('<span>dont <b>' + esc(fmt(totFut)) + '</b> à venir</span>');
+  sub.push('<span><b>' + list.length + '</b> ' + (list.length > 1 ? "entrées" : "entrée") + '</span>');
+  if(rev) sub.push('<span class="c-ok">+<b class="c-ok">' + esc(fmt(rev)) + '</b> de revenus</span>');
+  if(rev) sub.push('<span>net <b>' + esc(fmt(tot - rev)) + '</b></span>');
+  if(totFut) sub.push('<span>dont <b>' + esc(fmt(totFut)) + '</b> à venir</span>');
   h += '<div class="total-sub">' + sub.join("") + '</div></section>';
 
   h += '<div class="btns grow">' +
@@ -868,17 +970,26 @@ function vueAccueil(){
     (list.length ? '<span class="cnt">' + esc(fmt(tot)) + '</span>' : "") + '</div>';
 
   if(!list.length){
-    h += '<div class="ops"><div class="vide"><b>Rien sur l\'ardoise</b>' +
+    return h + '<div class="ops"><div class="vide"><b>Rien sur l\'ardoise</b>' +
       'Ajoute une dépense, elle s\'inscrit à la date du jour — ou à celle que tu choisis.</div></div>';
-    return h;
   }
 
+  h += '<div class="chips" style="margin-bottom:2px">' +
+    TRIS_ACC.map(([k,l]) => '<button class="chip ' + (mode === k ? "on" : "") + '" ' +
+      'data-act="acc-tri" data-id="' + k + '">' + l + '</button>').join("") + '</div>';
+
   h += '<div class="ops">';
-  grouper(list).forEach(g => {
-    h += '<div class="jour"><span>' + esc(relDate(g.date)) + '</span><span class="sp"></span>' +
-      '<span>' + esc(fmt(somme(g.items))) + '</span></div>';
-    g.items.forEach(d => { h += ligneDepense(d); });
-  });
+  if(mode === "recent" || mode === "ancien"){
+    grouperTri(list, mode).forEach(g => {
+      const gd = sommeDep(g.items), gr = sommeRev(g.items);
+      h += '<div class="jour"><span>' + esc(relDate(g.date)) + '</span><span class="sp"></span>' +
+        (gd ? '<span>' + esc(fmt(gd)) + '</span>' : "") +
+        (gr ? '<span class="c-ok">+' + esc(fmt(gr)) + '</span>' : "") + '</div>';
+      g.items.forEach(d => { h += ligneDepense(d); });
+    });
+  }else{
+    trierAnalyse(list, mode).forEach(d => { h += ligneDepense(d); });
+  }
   h += '</div>';
   return h;
 }
@@ -891,6 +1002,7 @@ function vueAccueil(){
 const PORTEES  = [["tout","Tout"],["cours","En cours"],["clos","Clôturé"]];
 const PERIODES = [["tout","Tout"],["30j","30 j"],["3m","3 mois"],["12m","12 mois"],["annee","Cette année"]];
 const TRIS     = [["recent","Récent"],["ancien","Ancien"],["montant","Montant ↓"],["montantA","Montant ↑"]];
+const SENS     = [["tout","Tout"],["dep","Dépenses"],["rev","Revenus"]];
 
 function rangeeChips(lbl, liste, courant, act){
   return '<div class="frow"><span class="fl">' + lbl + '</span><div class="chips">' +
@@ -900,74 +1012,93 @@ function rangeeChips(lbl, liste, courant, act){
 
 function ligneResultat(d){
   const p = d.periode && DB.periodes[d.periode];
+  const rev = estRevenu(d);
   const prev = !d.periode && d.date > todayISO();
+  const note = (d.note || "").trim();
   return '<button class="op' + (prev ? " prev" : "") + '" ' +
     'data-act="' + (p ? "ouvrir-periode" : "modifier-depense") + '" data-id="' + (p ? p.id : d.id) + '">' +
-    '<span class="op-ic">' + svg(prev ? "horloge" : "moins", 15, 2) + '</span>' +
+    '<span class="op-ic' + (rev ? " rev" : "") + '">' + svg(prev ? "horloge" : (rev ? "plus" : "moins"), 15, 2) + '</span>' +
     '<span class="op-mid"><span class="op-lib">' + esc(libelleDe(d)) +
       (p ? '<span class="badge">' + esc(p.titre) + '</span>' : "") +
+      (d.rec ? '<span class="badge rec">' + esc(libelleRec(d.rec)) + '</span>' : "") +
       (prev ? '<span class="tagprev">à venir</span>' : "") + '</span>' +
-    '<span class="op-met">' + esc(frDate(d.date, true)) + '</span></span>' +
-    '<span class="op-mt">−' + fmt(d.montant) + '</span></button>';
+    '<span class="op-met">' + esc(frDate(d.date, true)) + '</span>' +
+    (note ? '<span class="op-note">' + esc(note) + '</span>' : "") + '</span>' +
+    '<span class="op-mt' + (rev ? " rev" : "") + '">' + (rev ? "+" : "−") + fmt(d.montant) + '</span></button>';
 }
 
 function vueAnalyse(){
   const s = DB.settings;
   const q = state.q;
-  const res = chercher(q, s.aPortee, s.aPeriode);
-  const tot = somme(res);
-  const globalTot = somme(depensesAll());
+  const res = chercher(q, s.aPortee, s.aPeriode, s.aSens);
+  const tot = sommeDep(res);
+  const rev = sommeRev(res);
+  const globalTot = sommeDep(depensesAll());
   const part = globalTot ? Math.round(tot / globalTot * 100) : 0;
-  const filtre = !!q || s.aPortee !== "tout" || s.aPeriode !== "tout";
+  const filtre = !!q || s.aPortee !== "tout" || s.aPeriode !== "tout" || s.aSens !== "tout";
+  // Les deux répartitions ne mélangent jamais les sens : une barre qui
+  // additionnerait un salaire et des courses ne voudrait rien dire.
+  const base = s.aSens === "rev" ? res.filter(estRevenu) : res.filter(d => !estRevenu(d));
+  const totBase = somme(base);
 
   let h = '<div class="rech"><span class="lp">' + svg("loupe",17) + '</span>' +
     '<input type="text" id="a-q" autocomplete="off" autocapitalize="none" spellcheck="false" ' +
-    'placeholder="Chercher un libellé — pokémon, essence…" value="' + esc(q) + '">' +
+    'placeholder="Chercher un libellé ou une note…" value="' + esc(q) + '">' +
     (q ? '<button class="raz" data-act="raz-recherche" aria-label="Effacer">' + svg("croix",13,2.2) + '</button>' : "") +
     '</div>';
 
   h += '<div class="filtres">' +
+    rangeeChips("Sens", SENS, s.aSens, "a-sens") +
     rangeeChips("Portée", PORTEES, s.aPortee, "a-portee") +
     rangeeChips("Période", PERIODES, s.aPeriode, "a-periode") +
     rangeeChips("Tri", TRIS, s.aTri, "a-tri") + '</div>';
 
-  const mois = parMois(res);
-  const moy = mois.length ? Math.round(tot / mois.length) : 0;
-  const gros = res.reduce((m,d) => (d.montant > m ? d.montant : m), 0);
+  const mois = parMois(base);
+  const moy = mois.length ? Math.round(totBase / mois.length) : 0;
+  const gros = base.reduce((m,d) => (d.montant > m ? d.montant : m), 0);
+  const revenus = s.aSens !== "rev" && rev;
 
   h += '<section class="total" style="padding:20px 0 18px">' +
-    '<div class="total-lbl">' + (q ? 'Total pour « ' + esc(q) + ' »' : filtre ? "Total filtré" : "Tout ce qui est passé") + '</div>' +
-    '<span class="total-val num">' + esc(fmt(tot)) + '</span>' +
+    '<div class="total-lbl">' +
+      (q ? (s.aSens === "rev" ? 'Revenus pour « ' : 'Total pour « ') + esc(q) + ' »'
+         : s.aSens === "rev" ? "Tous les revenus" : filtre ? "Total filtré" : "Tout ce qui est passé") +
+    '</div>' +
+    '<span class="total-val num ' + (s.aSens === "rev" ? "c-ok" : "") + '">' +
+      (s.aSens === "rev" ? "+" : "") + esc(fmt(s.aSens === "rev" ? rev : tot)) + '</span>' +
     '<div class="total-bar"></div><div class="total-sub">' +
-    '<span><b>' + res.length + '</b> ' + (res.length > 1 ? "dépenses" : "dépense") + '</span>' +
+    '<span><b>' + res.length + '</b> ' + (res.length > 1 ? "entrées" : "entrée") + '</span>' +
     (mois.length > 1 ? '<span><b>' + esc(fmt(moy)) + '</b> par mois</span>' : "") +
-    (res.length ? '<span>plus grosse <b>' + esc(fmt(gros)) + '</b></span>' : "") +
-    (filtre && globalTot ? '<span><b>' + part + ' %</b> de tout</span>' : "") +
+    (base.length ? '<span>plus grosse <b>' + esc(fmt(gros)) + '</b></span>' : "") +
+    (revenus ? '<span class="c-ok">+<b class="c-ok">' + esc(fmt(rev)) + '</b> de revenus</span>' +
+               '<span>net <b>' + esc(fmt(tot - rev)) + '</b></span>' : "") +
+    (filtre && globalTot && s.aSens !== "rev" ? '<span><b>' + part + ' %</b> de tout</span>' : "") +
     '</div></section>';
 
   if(!res.length){
     return h + '<div class="ops"><div class="vide"><b>Aucun résultat</b>' +
-      (q ? 'Rien ne correspond à « ' + esc(q) +' » avec ces filtres.' : 'Aucune dépense sur cette période.') +
+      (q ? 'Rien ne correspond à « ' + esc(q) +' » avec ces filtres.' : 'Aucune entrée sur cette période.') +
       '</div></div>';
   }
 
   // Répartition par libellé
-  const gl = parLibelle(res);
-  const maxL = gl[0].total || 1;
-  const visibles = state.groupes ? gl : gl.slice(0, 6);
-  h += '<div class="sect"><h2>Par libellé</h2><div class="sp"></div>' +
-    '<span class="cnt">' + gl.length + (gl.length > 1 ? " libellés" : " libellé") + '</span></div><div class="ops">';
-  visibles.forEach(g => {
-    h += '<button class="grp' + (norm(q) === g.cle ? " on" : "") + '" data-act="chercher-libelle" data-id="' + esc(g.nom) + '">' +
-      '<span class="g-mid"><span class="g-n">' + esc(g.nom) + '</span>' +
-      '<span class="g-b"><i style="width:' + Math.max(2, Math.round(g.total / maxL * 100)) + '%"></i></span></span>' +
-      '<span class="g-r"><span class="g-t">' + esc(fmt(g.total)) + '</span>' +
-      '<span class="g-c">' + g.nb + '×</span></span></button>';
-  });
-  if(gl.length > 6)
-    h += '<button class="plus-r" data-act="basculer-groupes">' +
-      (state.groupes ? "Réduire" : "Afficher les " + (gl.length - 6) + " autres") + '</button>';
-  h += '</div>';
+  const gl = parLibelle(base);
+  if(gl.length){
+    const maxL = gl[0].total || 1;
+    const visibles = state.groupes ? gl : gl.slice(0, 6);
+    h += '<div class="sect"><h2>Par libellé</h2><div class="sp"></div>' +
+      '<span class="cnt">' + gl.length + (gl.length > 1 ? " libellés" : " libellé") + '</span></div><div class="ops">';
+    visibles.forEach(g => {
+      h += '<button class="grp' + (norm(q) === g.cle ? " on" : "") + '" data-act="chercher-libelle" data-id="' + esc(g.nom) + '">' +
+        '<span class="g-mid"><span class="g-n">' + esc(g.nom) + '</span>' +
+        '<span class="g-b"><i style="width:' + Math.max(2, Math.round(g.total / maxL * 100)) + '%"></i></span></span>' +
+        '<span class="g-r"><span class="g-t">' + esc(fmt(g.total)) + '</span>' +
+        '<span class="g-c">' + g.nb + '×</span></span></button>';
+    });
+    if(gl.length > 6)
+      h += '<button class="plus-r" data-act="basculer-groupes">' +
+        (state.groupes ? "Réduire" : "Afficher les " + (gl.length - 6) + " autres") + '</button>';
+    h += '</div>';
+  }
 
   // Répartition par mois
   if(mois.length > 1){
@@ -975,7 +1106,7 @@ function vueAnalyse(){
     const maxM = douze.reduce((m,g) => (g.total > m ? g.total : m), 1);
     h += '<div class="sect"><h2>Par mois</h2></div><div class="ops">';
     douze.forEach(g => {
-      h += '<div class="grp"><span class="g-mid"><span class="g-n">' + esc(libelleMois(g.cle)) + '</span>' +
+      h += '<div class="grp"><span class="g-mid"><span class="g-n">' + esc(cap(libelleMois(g.cle))) + '</span>' +
         '<span class="g-b"><i style="width:' + Math.max(2, Math.round(g.total / maxM * 100)) + '%"></i></span></span>' +
         '<span class="g-r"><span class="g-t">' + esc(fmt(g.total)) + '</span>' +
         '<span class="g-c">' + g.nb + '×</span></span></div>';
@@ -1000,11 +1131,15 @@ function vueAnalyse(){
 /* ============================================================
    HISTORIQUE
    ============================================================ */
-function totalPeriode(pid){ return somme(dePeriode(pid)); }
+function totalPeriode(pid){ return sommeDep(dePeriode(pid)); }
+function revenusPeriode(pid){ return sommeRev(dePeriode(pid)); }
 
 function vueHistorique(){
   const l = periodesAll().sort((a,b) => (b.cloture||0) - (a.cloture||0));
   const tot = l.reduce((s,p) => s + totalPeriode(p.id), 0);
+  const rev = l.reduce((s,p) => s + revenusPeriode(p.id), 0);
+  // La moyenne est celle des dépenses : un revenu encaissé un mois ne doit pas
+  // donner l'illusion d'avoir moins dépensé.
   const moy = l.length ? Math.round(tot / l.length) : 0;
 
   let h = '<section class="total">' +
@@ -1012,7 +1147,9 @@ function vueHistorique(){
     '<span class="total-val num">' + esc(fmt(tot)) + '</span>' +
     '<div class="total-bar"></div>' +
     '<div class="total-sub"><span><b>' + l.length + '</b> ' + (l.length > 1 ? "mois clôturés" : "mois clôturé") + '</span>' +
-    (l.length ? '<span>moyenne <b>' + esc(fmt(moy)) + '</b></span>' : "") + '</div></section>';
+    (l.length ? '<span>moyenne <b>' + esc(fmt(moy)) + '</b> par mois</span>' : "") +
+    (rev ? '<span class="c-ok">+<b class="c-ok">' + esc(fmt(rev)) + '</b> de revenus</span>' : "") +
+    '</div></section>';
 
   h += '<div class="sect"><h2>Mois clôturés</h2></div>';
   if(!l.length){
@@ -1022,13 +1159,14 @@ function vueHistorique(){
 
   h += '<div class="ops">';
   l.forEach(p => {
-    const t = totalPeriode(p.id), n = dePeriode(p.id).length;
+    const t = totalPeriode(p.id), r = revenusPeriode(p.id), n = dePeriode(p.id).length;
     const e = etatBudget(t, p.budget);
     const d = new Date((p.debut || todayISO()) + "T12:00:00");
     h += '<button class="prow" data-act="ouvrir-periode" data-id="' + p.id + '">' +
       '<span class="pemo">' + esc(MOIS[isNaN(d) ? 0 : d.getMonth()]) + '</span>' +
       '<span class="pmid"><span class="pname">' + esc(p.titre) + '</span>' +
-      '<span class="psub">' + n + (n > 1 ? " dépenses" : " dépense") +
+      '<span class="psub">' + n + (n > 1 ? " entrées" : " entrée") +
+      (r ? " · +" + esc(fmt(r)) + " de revenus" : "") +
       (p.budget ? " · budget " + esc(fmt(p.budget)) : "") + '</span></span>' +
       '<span class="pbal num ' + (e ? CL[e] : "") + '">' + esc(fmt(t)) + '</span>' +
       '<span class="pgo">' + svg("chev",16) + '</span></button>';
@@ -1038,7 +1176,8 @@ function vueHistorique(){
 
 function vuePeriode(p){
   const list = dePeriode(p.id);
-  const tot = somme(list);
+  const tot = sommeDep(list);
+  const rev = sommeRev(list);
   const e = etatBudget(tot, p.budget);
 
   let h = '<div class="sheet"><div class="sheet-top">' +
@@ -1048,29 +1187,37 @@ function vuePeriode(p){
       svg("crayon",17) + '</button></div><div class="sheet-in">';
 
   h += '<section class="total">' +
-    '<div class="total-lbl">Total du mois</div>' +
+    '<div class="total-lbl">Dépenses du mois</div>' +
     '<span class="total-val num ' + (e ? CL[e] : "") + '">' + esc(fmt(tot)) + '</span>' +
     blocBudget(tot, p.budget, true) +
-    '<div class="total-sub"><span><b>' + list.length + '</b> ' + (list.length > 1 ? "dépenses" : "dépense") + '</span>' +
+    '<div class="total-sub"><span><b>' + list.length + '</b> ' + (list.length > 1 ? "entrées" : "entrée") + '</span>' +
+    (rev ? '<span class="c-ok">+<b class="c-ok">' + esc(fmt(rev)) + '</b> de revenus</span>' +
+           '<span>net <b>' + esc(fmt(tot - rev)) + '</b></span>' : "") +
     '<span>du ' + esc(frDate(p.debut, true)) + ' au ' + esc(frDate(p.fin, true)) + '</span>' +
     '<span>clôturé le ' + esc(quand(p.cloture)) + '</span></div></section>';
 
   h += '<div class="sect"><h2>Détail</h2></div><div class="ops">';
   grouper(list).forEach(g => {
+    const gd = sommeDep(g.items), gr = sommeRev(g.items);
     h += '<div class="jour"><span>' + esc(frDate(g.date, true)) + '</span><span class="sp"></span>' +
-      '<span>' + esc(fmt(somme(g.items))) + '</span></div>';
+      (gd ? '<span>' + esc(fmt(gd)) + '</span>' : "") +
+      (gr ? '<span class="c-ok">+' + esc(fmt(gr)) + '</span>' : "") + '</div>';
     g.items.forEach(d => {
-      h += '<div class="op"><span class="op-ic">' + svg("moins",15,2) + '</span>' +
-        '<span class="op-mid"><span class="op-lib">' + esc(libelleDe(d)) + '</span></span>' +
-        '<span class="op-mt">−' + fmt(d.montant) + '</span></div>';
+      const rv = estRevenu(d);
+      const note = (d.note || "").trim();
+      h += '<div class="op"><span class="op-ic' + (rv ? " rev" : "") + '">' + svg(rv ? "plus" : "moins",15,2) + '</span>' +
+        '<span class="op-mid"><span class="op-lib">' + esc(libelleDe(d)) +
+          (d.rec ? '<span class="badge rec">' + esc(libelleRec(d.rec)) + '</span>' : "") + '</span>' +
+        (note ? '<span class="op-note">' + esc(note) + '</span>' : "") + '</span>' +
+        '<span class="op-mt' + (rv ? " rev" : "") + '">' + (rv ? "+" : "−") + fmt(d.montant) + '</span></div>';
     });
   });
   h += '</div>';
 
   h += '<div class="btns" style="margin-top:20px">' +
-    '<button class="btn" style="flex:1" data-act="rouvrir-periode" data-id="' + p.id + '">Rouvrir ce mois</button>' +
+    '<button class="btn" style="flex:1" data-act="rouvrir-periode" data-id="' + p.id + '">Annuler la clôture</button>' +
     '<button class="btn dang" style="flex:0 0 auto" data-act="supprimer-periode" data-id="' + p.id + '">Supprimer</button></div>' +
-    '<div class="aide">Rouvrir remet ces dépenses sur l\'accueil et efface le mois de l\'historique.</div>';
+    '<div class="aide">Annuler la clôture remet ces entrées sur l\'accueil et efface le mois de l\'historique.</div>';
 
   return h + '</div></div>';
 }
@@ -1089,56 +1236,100 @@ function boiteBoutons(valider, act){
     '<button class="btn pri" style="flex:1" data-act="' + act + '">' + valider + '</button></div>';
 }
 
+const RECS = [["aucune","Aucune"],["mensuel","Tous les mois"],["fois","Plusieurs fois"]];
+
 function vueModal(m){
   let c = "";
   if(m.type === "depense"){
-    const dj = todayISO();
-    c = '<h3>' + (m.id ? "Modifier la dépense" : "Nouvelle dépense") + '</h3>' +
-      '<div class="sous">' + (m.id ? "Le montant, le libellé et la date restent modifiables."
+    const rev = m.sens === "revenu";
+    const rec = m.rec || "aucune";
+    c = '<h3>' + (m.id ? (rev ? "Modifier le revenu" : "Modifier la dépense")
+                       : (rev ? "Nouveau revenu" : "Nouvelle dépense")) + '</h3>' +
+      '<div class="sous">' + (m.id ? "Tout reste modifiable, y compris le sens."
                                    : "La date du jour est déjà remplie.") + '</div>' +
+      '<div class="champ"><div class="seg" style="width:100%">' +
+        '<button style="flex:1" class="' + (!rev ? "on" : "") + '" data-act="sens" data-id="depense">Dépense</button>' +
+        '<button style="flex:1" class="' + (rev ? "on" : "") + '" data-act="sens" data-id="revenu">Revenu</button>' +
+      '</div></div>' +
       champMontant(m.montant) +
       '<div class="champ"><label for="m-lib">C\'est quoi ?</label>' +
-      '<input type="text" id="m-lib" autocomplete="off" placeholder="Courses, essence, resto…" value="' + esc(m.libelle||"") + '"></div>' +
+      '<input type="text" id="m-lib" autocomplete="off" placeholder="' +
+        (rev ? "Salaire, remboursement…" : "Courses, essence, resto…") + '" value="' + esc(m.libelle||"") + '"></div>' +
+      '<div class="champ"><label for="m-note">Note <span style="color:var(--gris2)">facultative</span></label>' +
+      '<textarea id="m-note" rows="2" autocomplete="off" placeholder="Le détail qu\'on oublie en trois mois">' + esc(m.note||"") + '</textarea>' +
+      '<div class="aide">La recherche fouille les notes autant que les libellés.</div></div>' +
       '<div class="champ"><label for="m-date">Date</label>' +
-      '<input type="date" id="m-date" value="' + esc(m.date || dj) + '">' +
+      '<input type="date" id="m-date" value="' + esc(m.date || todayISO()) + '">' +
       '<div class="raccourcis">' +
         '<button data-act="date-rapide" data-id="0">aujourd\'hui</button>' +
         '<button data-act="date-rapide" data-id="-1">hier</button>' +
         '<button data-act="date-rapide" data-id="1">demain</button>' +
         '<button data-act="date-rapide" data-id="7">dans 7 j</button>' +
       '</div>' +
-      '<div class="aide">Une dépense datée plus tard reste comptée dans le total, signalée « à venir ».</div></div>' +
-      (m.id ? '<div class="btns" style="margin:16px 0 0"><button class="btn dang wide" data-act="supprimer-depense" data-id="' + m.id + '">Supprimer</button></div>' : "") +
+      '<div class="aide">Une entrée datée plus tard reste comptée dans le total, signalée « à venir ».</div></div>' +
+      '<div class="champ"><label>Récurrence</label><div class="seg" style="width:100%">' +
+        RECS.map(([k,l]) => '<button style="flex:1" class="' + (rec === k ? "on" : "") + '" ' +
+          'data-act="rec" data-id="' + k + '">' + l + '</button>').join("") + '</div>' +
+      (rec === "fois" ?
+        '<div class="champ" style="margin:10px 0 0"><label for="m-fois">Nombre d\'échéances</label>' +
+        '<input type="number" id="m-fois" inputmode="numeric" min="2" max="60" value="' + esc(m.fois || "3") + '">' +
+        '<div class="aide">Le montant saisi est celui d\'une échéance' +
+          (m.recIndex > 1 ? ". Celle-ci est la n° " + m.recIndex + "." : ", répétée le même jour chaque mois.") + '</div></div>' : "") +
+      (rec === "mensuel" ? '<div class="aide">Sans fin, jusqu\'à ce que tu la retires.</div>' : "") +
+      (rec !== "aucune" ? '<div class="aide">La suivante est créée au moment où tu clôtures le mois.</div>' : "") +
+      '</div>' +
+      (m.id ? '<div class="btns" style="margin:16px 0 0">' +
+        '<button class="btn" style="flex:1" data-act="dupliquer-depense" data-id="' + m.id + '">Dupliquer</button>' +
+        '<button class="btn dang" style="flex:1" data-act="supprimer-depense" data-id="' + m.id + '">Supprimer</button></div>' : "") +
       boiteBoutons("Valider", m.id ? "depense-enregistrer" : "depense-creer");
   }
   else if(m.type === "budget"){
     c = '<h3>Budget du mois</h3>' +
       '<div class="sous">Le plafond que tu te fixes. Laisse vide pour n\'en avoir aucun : le total reste alors affiché en noir, sans jauge.</div>' +
       champMontant(m.montant) +
-      '<div class="aide">Vert jusqu\'à 75 %, orange ensuite, rouge à partir de 95 %.</div>' +
+      '<div class="aide">Vert jusqu\'à 75 %, orange ensuite, rouge à partir de 95 %. Les revenus n\'entrent pas dans la jauge.</div>' +
       boiteBoutons("Enregistrer", "budget-enregistrer");
   }
   else if(m.type === "cloture"){
     const list = enCours();
     const fut = futures(list);
     const rep = !!m.reporter;
-    const dedans = rep ? list.length - fut.length : list.length;
-    const totDedans = somme(rep ? list.filter(d => fut.indexOf(d) === -1) : list);
+    const dedans = rep ? list.filter(d => fut.indexOf(d) === -1) : list;
+    const recs = dedans.filter(d => d.rec && (d.rec.mode !== "fois" || (d.rec.index||1) < (d.rec.total||1)));
     c = '<h3>Clôturer le mois</h3>' +
-      '<div class="sous">Les dépenses en cours partent dans l\'historique et l\'accueil repart de zéro.</div>' +
+      '<div class="sous">Les entrées en cours partent dans l\'historique et l\'accueil repart de zéro.</div>' +
       '<div class="champ"><label for="m-titre">Nom du mois</label>' +
-      '<input type="text" id="m-titre" autocomplete="off" placeholder="' + esc(moisLong(todayISO())) + '" value="' + esc(m.titre || "") + '"></div>' +
+      '<input type="text" id="m-titre" autocomplete="off" placeholder="' + esc(m.defaut) + '" value="' + esc(m.titre || "") + '"></div>' +
       (fut.length ?
         '<button class="bascule' + (rep ? " on" : "") + '" data-act="bascule-report">' +
-        '<span class="l">Reporter les dépenses à venir' +
-        '<span class="d">' + fut.length + (fut.length > 1 ? " dépenses datées" : " dépense datée") +
-        ' après aujourd\'hui, pour ' + esc(fmt(somme(fut))) + '. Elles resteront sur l\'accueil.</span></span>' +
+        '<span class="l">Reporter les entrées à venir' +
+        '<span class="d">' + fut.length + (fut.length > 1 ? " entrées datées" : " entrée datée") +
+        ' après aujourd\'hui. Elles resteront sur l\'accueil.</span></span>' +
         '<span class="k"></span></button>' : "") +
-      '<div class="aide">' + dedans + (dedans > 1 ? " dépenses clôturées" : " dépense clôturée") +
-      ', pour ' + esc(fmt(totDedans)) + '.</div>' +
+      '<div class="aide">' + dedans.length + (dedans.length > 1 ? " entrées clôturées" : " entrée clôturée") +
+      ', pour ' + esc(fmt(sommeDep(dedans))) + ' de dépenses' +
+      (sommeRev(dedans) ? " et " + esc(fmt(sommeRev(dedans))) + " de revenus" : "") + '.' +
+      (recs.length ? '<br>' + recs.length + (recs.length > 1 ? " récurrences seront reconduites" : " récurrence sera reconduite") +
+        ' sur le mois suivant.' : "") + '</div>' +
       '<div class="btns" style="margin:20px 0 0">' +
       '<button class="btn" style="flex:0 0 auto" data-act="fermer-modal">Renoncer</button>' +
-      '<button class="btn pri" style="flex:1" data-act="cloture-ok"' + (dedans ? "" : " disabled") + '>Clôturer</button></div>';
+      '<button class="btn pri" style="flex:1" data-act="cloture-ok"' + (dedans.length ? "" : " disabled") + '>Clôturer</button></div>';
+  }
+  else if(m.type === "rouvrir"){
+    const n = enCours().length;
+    const eng = echeancesEngendrees(m.id).length;
+    c = '<h3>Annuler la clôture ?</h3>' +
+      '<div class="sous">« ' + esc(m.titre) + ' » quitte l\'historique et ses ' + m.nb +
+        (m.nb > 1 ? " entrées reviennent" : " entrée revient") + ' sur le mois en cours.</div>' +
+      (n ? '<div class="avert"><b>Attention.</b> Le mois en cours contient déjà ' + n +
+        (n > 1 ? " entrées" : " entrée") + '. Les deux vont se mélanger sur l\'accueil, et le budget sera calculé sur l\'ensemble.' +
+        (eng ? ' Les ' + eng + ' échéance' + (eng > 1 ? "s" : "") + ' que cette clôture avait engendrée' + (eng > 1 ? "s" : "") +
+          ' seront retirées, pour éviter les doublons.' : "") + '</div>'
+        : (eng ? '<div class="aide">Les ' + eng + ' échéance' + (eng > 1 ? "s engendrées" : " engendrée") +
+            ' par cette clôture seront retirées, pour éviter les doublons.</div>' : "")) +
+      '<div class="btns" style="margin:20px 0 0">' +
+      '<button class="btn" style="flex:0 0 auto" data-act="fermer-modal">Renoncer</button>' +
+      '<button class="btn pri" style="flex:1" data-act="rouvrir-ok" data-id="' + m.id + '">Annuler la clôture</button></div>';
   }
   else if(m.type === "renommer"){
     c = '<h3>Renommer le mois</h3>' +
@@ -1246,11 +1437,33 @@ function vueReglages(){
 function ouvrirModal(m){ state.modal = m; render(); }
 function fermerModal(){ state.modal = null; render(); }
 
+/* Basculer un interrupteur redessine la fenêtre : sans relever les champs
+   avant, un montant à moitié saisi disparaîtrait au moindre changement de sens
+   ou de récurrence. */
+function capturerModal(){
+  const m = state.modal;
+  if(!m) return;
+  const g = i => { const e = document.getElementById(i); return e ? e.value : undefined; };
+  ["montant","lib","note","date","fois","titre"].forEach(k => {
+    const v = g("m-" + k);
+    if(v === undefined) return;
+    m[k === "lib" ? "libelle" : k] = v;
+  });
+}
 function lireDepenseModal(){
+  const m = state.modal || {};
   const montant = cents(($("#m-montant") || {}).value);
   const libelle = (($("#m-lib") || {}).value || "").trim();
+  const note = (($("#m-note") || {}).value || "").trim();
   const date = (($("#m-date") || {}).value || "").trim() || todayISO();
-  return { montant, libelle, date };
+  const sens = m.sens === "revenu" ? "revenu" : "depense";
+  let rec = null;
+  if(m.rec === "mensuel") rec = { mode:"mensuel" };
+  else if(m.rec === "fois"){
+    const n = Math.max(2, Math.min(60, parseInt((($("#m-fois") || {}).value || m.fois || "3"), 10) || 3));
+    rec = { mode:"fois", total:n, index:Math.min(m.recIndex || 1, n) };
+  }
+  return { montant, libelle, note, date, sens, rec };
 }
 
 document.addEventListener("click", async ev => {
@@ -1270,7 +1483,11 @@ document.addEventListener("click", async ev => {
     DB.meta.vue = VERSION; sauver(true); render(); window.scrollTo(0,0); return;
   }
 
+  /* ---- tri de l'accueil ---- */
+  if(act === "acc-tri"){ DB.settings.accTri = id; sauver(true); render(); return; }
+
   /* ---- analyse ---- */
+  if(act === "a-sens"){ DB.settings.aSens = id; state.limite = 30; sauver(true); render(); return; }
   if(act === "a-portee"){ DB.settings.aPortee = id; state.limite = 30; sauver(true); render(); return; }
   if(act === "a-periode"){ DB.settings.aPeriode = id; state.limite = 30; sauver(true); render(); return; }
   if(act === "a-tri"){ DB.settings.aTri = id; sauver(true); render(); return; }
@@ -1289,16 +1506,22 @@ document.addEventListener("click", async ev => {
     fermerToast(); return;
   }
 
-  /* ---- dépenses ---- */
+  /* ---- entrées ---- */
   if(act === "nouvelle-depense"){
-    ouvrirModal({ type:"depense", date:todayISO(), focus:"m-montant" });
+    ouvrirModal({ type:"depense", date:todayISO(), sens:"depense", rec:"aucune", fois:"3", focus:"m-montant" });
     return;
   }
   if(act === "modifier-depense"){
     const d = DB.depenses[id];
-    if(d) ouvrirModal({ type:"depense", id:d.id, montant:brut(d.montant), libelle:d.libelle, date:d.date, focus:"m-montant" });
+    if(!d) return;
+    ouvrirModal({ type:"depense", id:d.id, montant:brut(d.montant), libelle:d.libelle,
+      note:d.note || "", date:d.date, sens:estRevenu(d) ? "revenu" : "depense",
+      rec:d.rec ? d.rec.mode : "aucune", fois:d.rec && d.rec.total ? String(d.rec.total) : "3",
+      recIndex:d.rec && d.rec.index || 1, focus:"m-montant" });
     return;
   }
+  if(act === "sens"){ capturerModal(); state.modal.sens = id; render(); return; }
+  if(act === "rec"){ capturerModal(); state.modal.rec = id; render(); return; }
   if(act === "date-rapide"){
     const champ = $("#m-date");
     if(champ){
@@ -1314,13 +1537,28 @@ document.addEventListener("click", async ev => {
     if(act === "depense-creer"){
       creerDepense(v);
       fermerModal();
-      toast("Dépense ajoutée");
+      toast(v.sens === "revenu" ? "Revenu ajouté" : "Dépense ajoutée");
     }else{
       const d = DB.depenses[state.modal.id];
-      if(d){ d.montant = v.montant; d.libelle = v.libelle; d.date = v.date; sauverDepense(d); }
+      if(d){
+        d.montant = v.montant; d.libelle = v.libelle; d.note = v.note;
+        d.date = v.date; d.sens = v.sens; d.rec = v.rec;
+        sauverDepense(d);
+      }
       fermerModal();
-      toast("Dépense modifiée");
+      toast("Entrée modifiée");
     }
+    return;
+  }
+  if(act === "dupliquer-depense"){
+    const d = DB.depenses[id];
+    if(!d) return;
+    // La copie prend la date du jour et repart sans récurrence : dupliquer un
+    // abonnement pour en faire un second abonnement serait rarement voulu.
+    const c = creerDepense({ montant:d.montant, libelle:d.libelle, note:d.note,
+                             sens:d.sens, date:todayISO(), rec:null });
+    fermerModal();
+    toast("Dupliquée au " + relDate(c.date));
     return;
   }
   if(act === "supprimer-depense"){
@@ -1329,7 +1567,7 @@ document.addEventListener("click", async ev => {
     corbeille = { depenses:[JSON.parse(JSON.stringify(d))], periodes:[] };
     supprimerDepenseDB(id);
     fermerModal();
-    toast("Dépense supprimée", "annuler-suppr");
+    toast("Entrée supprimée", "annuler-suppr");
     return;
   }
 
@@ -1351,12 +1589,14 @@ document.addEventListener("click", async ev => {
 
   /* ---- clôture ---- */
   if(act === "cloturer"){
-    if(!enCours().length){ toast("Rien à clôturer"); return; }
-    ouvrirModal({ type:"cloture", titre:"", reporter:!!DB.settings.reporterFuturs });
+    const l = enCours();
+    if(!l.length){ toast("Rien à clôturer"); return; }
+    ouvrirModal({ type:"cloture", titre:"", defaut:cap(libelleMois(moisDominant(l))),
+                  reporter:!!DB.settings.reporterFuturs });
     return;
   }
   if(act === "bascule-report"){
-    state.modal.titre = (($("#m-titre") || {}).value || "");
+    capturerModal();
     state.modal.reporter = !state.modal.reporter;
     DB.settings.reporterFuturs = state.modal.reporter;
     sauver(true);
@@ -1364,11 +1604,12 @@ document.addEventListener("click", async ev => {
     return;
   }
   if(act === "cloture-ok"){
-    const titre = (($("#m-titre") || {}).value || "").trim();
+    const titre = (($("#m-titre") || {}).value || "").trim() || state.modal.defaut;
     const r = cloturer(titre, !!state.modal.reporter);
     fermerModal();
     if(!r){ toast("Rien à clôturer"); return; }
-    toast(r.nb + (r.nb > 1 ? " dépenses clôturées" : " dépense clôturée") +
+    toast(r.nb + (r.nb > 1 ? " entrées clôturées" : " entrée clôturée") +
+          (r.rec ? ", " + r.rec + (r.rec > 1 ? " récurrences reconduites" : " récurrence reconduite") : "") +
           (r.reportees ? ", " + r.reportees + (r.reportees > 1 ? " reportées" : " reportée") : ""));
     render();
     return;
@@ -1389,11 +1630,17 @@ document.addEventListener("click", async ev => {
   }
   if(act === "rouvrir-periode"){
     const p = DB.periodes[id];
+    if(p) ouvrirModal({ type:"rouvrir", id:p.id, titre:p.titre, nb:dePeriode(p.id).length });
+    return;
+  }
+  if(act === "rouvrir-ok"){
+    const p = DB.periodes[id];
     if(!p) return;
+    const t = p.titre;
     rouvrir(id);
-    state.periode = null; state.tab = "accueil";
+    state.periode = null; state.modal = null; state.tab = "accueil";
     render(); window.scrollTo(0,0);
-    toast("« " + p.titre + " » rouvert");
+    toast("Clôture de « " + t + " » annulée");
     return;
   }
   if(act === "supprimer-periode"){

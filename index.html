@@ -76,9 +76,10 @@ header.top{position:sticky;top:0;z-index:30;background:var(--voile);
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--voile);
   backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
   border-top:1px solid var(--trait);padding-bottom:env(safe-area-inset-bottom)}
-.tabs-in{max-width:640px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr)}
+.tabs-in{max-width:640px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr)}
 .tab{padding:8px 0 7px;display:flex;flex-direction:column;align-items:center;gap:3px;
-  color:var(--gris);font-size:10.5px;letter-spacing:-.01em;border-top:2px solid transparent;margin-top:-1px}
+  color:var(--gris);font-size:9.5px;letter-spacing:-.01em;border-top:2px solid transparent;margin-top:-1px}
+.tab span{white-space:nowrap}
 .tab.on{color:var(--texte);border-top-color:var(--acc)}
 .tab.on svg{color:var(--acc)}
 
@@ -143,10 +144,16 @@ nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--voil
   background:var(--fond2);border:1px solid var(--trait2);font-size:13px;line-height:1;
   font-family:"IBM Plex Mono",monospace;color:var(--gris);text-transform:uppercase}
 .pmid{flex:1;min-width:0}
-.pname{font-weight:500;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+.pname{display:block;font-weight:500;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   text-transform:capitalize}
-.psub{font-size:12px;color:var(--gris2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psub{display:block;font-size:12px;color:var(--gris2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pbal{font-size:18px;font-weight:600;white-space:nowrap}
+.pemo.rec{border-color:var(--accB);color:var(--acc);background:var(--accF);font-size:12px}
+.pemo.rec.inf{font-size:19px}
+.prow .pmt{text-align:right;flex:0 0 auto}
+.prow .pmt .m{font-family:"IBM Plex Mono",monospace;font-size:14px;font-weight:500;white-space:nowrap;display:block}
+.prow .pmt .r{font-size:11px;color:var(--gris2);font-family:"IBM Plex Mono",monospace;display:block;margin-top:2px}
+.prow .pmt .m.rev{color:var(--ok)}
 .pgo{color:var(--gris2);flex:0 0 auto;display:grid;place-items:center}
 
 /* ---------------- recherche et analyse ---------------- */
@@ -163,12 +170,12 @@ nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--voil
 .grp{display:flex;align-items:center;gap:11px;width:100%;text-align:left;
   padding:10px 2px;border-bottom:1px solid var(--trait2)}
 .grp .g-mid{flex:1;min-width:0}
-.grp .g-n{font-size:14px;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.grp .g-n{display:block;font-size:14px;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .grp .g-b{height:5px;border-radius:3px;background:var(--trait2);overflow:hidden;margin-top:6px}
 .grp .g-b i{display:block;height:100%;background:var(--acc);border-radius:3px}
 .grp .g-r{text-align:right;flex:0 0 auto}
-.grp .g-t{font-family:"IBM Plex Mono",monospace;font-size:13.5px;font-weight:500;white-space:nowrap}
-.grp .g-c{font-size:11px;color:var(--gris2);font-family:"IBM Plex Mono",monospace;margin-top:2px}
+.grp .g-t{display:block;font-family:"IBM Plex Mono",monospace;font-size:13.5px;font-weight:500;white-space:nowrap}
+.grp .g-c{display:block;font-size:11px;color:var(--gris2);font-family:"IBM Plex Mono",monospace;margin-top:2px}
 .grp.on .g-b i{background:var(--texte)}
 .badge{display:inline-block;font-size:10px;border:1px solid var(--trait);color:var(--gris2);
   border-radius:5px;padding:0 4px;margin-left:6px;vertical-align:1px;font-family:"IBM Plex Mono",monospace;
@@ -234,7 +241,7 @@ textarea{resize:vertical;min-height:44px;line-height:1.45;font-family:inherit}
 .bascule{display:flex;align-items:center;gap:11px;padding:11px 12px;border:1px solid var(--trait);
   border-radius:10px;margin:12px 0;text-align:left;width:100%}
 .bascule .l{flex:1;min-width:0;font-size:13.5px}
-.bascule .d{font-size:12px;color:var(--gris);margin-top:2px}
+.bascule .d{display:block;font-size:12px;color:var(--gris);margin-top:2px}
 .bascule .k{width:40px;height:24px;border-radius:999px;background:var(--trait);flex:0 0 40px;position:relative;transition:background .18s}
 .bascule .k::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;
   background:var(--fond);box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .18s}
@@ -317,9 +324,17 @@ html[data-theme="sombre"] .seg button.on{background:var(--texte);color:#0d0d10}
    Un seul fichier, aucune dépendance, stockage local (IndexedDB).
    ============================================================ */
 
-const VERSION = "1.2.0";
+const VERSION = "1.3.0";
 const SCHEMA  = 2;
 const JOURNAL = [
+  { v:"1.3.0", d:"2026-09-03", t:"Suivi des récurrences", l:[
+    "Un onglet réunit les récurrences actives : le libellé, le sens, le rang atteint, les échéances passées sur le total, celles qui restent, et la date de la prochaine.",
+    "En haut, l'engagement mensuel et ce qu'il reste à payer sur les paiements en plusieurs fois.",
+    "Annuler une clôture laisse le choix entre mélanger avec le mois en cours et l'écraser. L'écrasement reste rattrapable le temps que le bandeau s'affiche.",
+    "Clôturer sous un nom déjà présent dans l'historique demande une confirmation, avec le montant et la date du mois homonyme.",
+    "Le clavier ne surgit plus tout seul à l'ouverture d'une fenêtre de saisie de montant.",
+    "Correction : dans l'historique et dans les répartitions, le titre et son sous-titre se suivaient sur la même ligne, collés. Six règles d'affichage étaient en cause."
+  ]},
   { v:"1.2.0", d:"2026-09-03", t:"Revenus, notes et récurrences", l:[
     "Une entrée peut être un revenu : l'interrupteur est dans la fenêtre d'ajout, la dépense reste le choix par défaut.",
     "Les revenus ne sont jamais mêlés aux dépenses dans les totaux ni dans la moyenne de l'historique : ils sont comptés à part, avec le net affiché à côté.",
@@ -482,7 +497,8 @@ const ICONES = {
   verrou:'<rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
   horloge:'<circle cx="12" cy="12" r="8.2"/><path d="M12 7.5V12l3 1.8"/>',
   cal:'<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/>',
-  loupe:'<circle cx="10.8" cy="10.8" r="6.3"/><path d="M15.4 15.4 20 20"/>'
+  loupe:'<circle cx="10.8" cy="10.8" r="6.3"/><path d="M15.4 15.4 20 20"/>',
+  boucle:'<path d="M17 3.5 20.5 7 17 10.5"/><path d="M3.5 13v-2a4 4 0 0 1 4-4h13"/><path d="M7 20.5 3.5 17 7 13.5"/><path d="M20.5 11v2a4 4 0 0 1-4 4h-13"/>'
 };
 /* Le sigle : les bâtons de l'ardoise du café, barrés par le cinquième trait.
    Il se peint avec les variables du thème, donc il suit l'accent sans être
@@ -815,16 +831,55 @@ function cloturer(titre, reporter){
   const rec = propagerRecurrences(dedans, p.id);
   return { p, nb:dedans.length, reportees:reportees.length, rec };
 }
-/* Annuler une clôture, c'est la défaire entièrement : les entrées reviennent
-   sur l'accueil et les échéances que la clôture avait engendrées repartent,
-   sans quoi une récurrence se dédoublerait à chaque aller-retour. */
+/* Annuler une clôture, c'est la défaire : les entrées reviennent sur l'accueil
+   et les échéances que la clôture avait engendrées repartent, sans quoi une
+   récurrence se dédoublerait à chaque aller-retour. Reste à décider du sort de
+   ce qui a été saisi depuis — le mélange ou l'écrasement. */
 function echeancesEngendrees(pid){
   return depensesAll().filter(d => d.issuDe === pid && !d.periode);
 }
-function rouvrir(pid){
-  echeancesEngendrees(pid).forEach(d => supprimerDepenseDB(d.id));
+function rouvrir(pid, ecraser){
+  let supprimees = [];
+  if(ecraser){
+    // Tout ce qui est en cours part, échéances engendrées comprises.
+    supprimees = enCours().map(d => JSON.parse(JSON.stringify(d)));
+    enCours().forEach(d => supprimerDepenseDB(d.id));
+  }else{
+    echeancesEngendrees(pid).forEach(d => supprimerDepenseDB(d.id));
+  }
   dePeriode(pid).forEach(d => { d.periode = ""; sauverDepense(d); });
   supprimerPeriodeDB(pid);
+  return supprimees;
+}
+
+/* ---------- récurrences ----------
+   Une récurrence vit dans son échéance en cours : c'est elle qui porte le
+   rang et engendrera la suivante. Il n'y a donc jamais qu'une ligne par
+   récurrence sur l'accueil, et la liste des récurrences actives se lit
+   directement dessus. */
+function recActives(){
+  return enCours().filter(d => d.rec)
+    .sort((a,b) => (a.date === b.date ? libelleDe(a).localeCompare(libelleDe(b)) : (a.date < b.date ? -1 : 1)));
+}
+const recSansFin = d => d.rec && d.rec.mode === "mensuel";
+/* Le rang courant n'est pas encore payé : les échéances passées sont celles
+   qui le précèdent. */
+function recPassees(d){ return d.rec && d.rec.mode === "fois" ? Math.max(0, (d.rec.index||1) - 1) : 0; }
+function recRestantes(d){
+  if(!d.rec) return 0;
+  if(d.rec.mode === "mensuel") return Infinity;
+  return Math.max(0, (d.rec.total||1) - (d.rec.index||1) + 1);
+}
+function recReste(d){
+  const n = recRestantes(d);
+  return n === Infinity ? Infinity : n * d.montant;
+}
+/* Un titre de mois déjà pris : la clôture doit prévenir avant de créer un
+   doublon qu'on ne saura plus distinguer dans l'historique. */
+function titreDouble(t){
+  const n = norm(t);
+  if(!n) return null;
+  return periodesAll().find(p => norm(p.titre) === n) || null;
 }
 function supprimerPeriode(pid){
   dePeriode(pid).forEach(d => supprimerDepenseDB(d.id));
@@ -840,10 +895,11 @@ function restaurerPaquet(paq){
    ÉTAT DE L'INTERFACE
    ============================================================ */
 const TABS = [
-  { id:"accueil",   l:"Accueil",    i:"home" },
-  { id:"analyse",   l:"Analyse",    i:"loupe" },
-  { id:"histo",     l:"Historique", i:"archive" },
-  { id:"reglages",  l:"Réglages",   i:"cog" }
+  { id:"accueil",   l:"Accueil",     i:"home" },
+  { id:"analyse",   l:"Analyse",     i:"loupe" },
+  { id:"recur",     l:"Récurrences", i:"boucle" },
+  { id:"histo",     l:"Historique",  i:"archive" },
+  { id:"reglages",  l:"Réglages",    i:"cog" }
 ];
 const state = { tab:"accueil", periode:null, modal:null, journal:false, neuf:false, quota:null,
                 q:"", limite:30, groupes:false };
@@ -880,6 +936,7 @@ function dessiner(){
   const v = $("#view");
   if(state.tab === "accueil")      v.innerHTML = vueAccueil();
   else if(state.tab === "analyse") v.innerHTML = vueAnalyse();
+  else if(state.tab === "recur")   v.innerHTML = vueRecurrences();
   else if(state.tab === "histo")   v.innerHTML = vueHistorique();
   else                             v.innerHTML = vueReglages();
 
@@ -897,6 +954,10 @@ function dessiner(){
 
   const couvert = !!($("#sheet").firstChild || $("#modal").firstChild);
   document.body.style.overflow = couvert ? "hidden" : "";
+  // Le champ visé par « focus » reçoit le curseur à l'ouverture. Les fenêtres
+  // de saisie d'un montant s'en passent volontairement : sur Android, le
+  // clavier surgirait par-dessus la moitié de la fenêtre avant même qu'on ait
+  // lu ce qu'elle contient.
   if(state.modal && state.modal.focus){
     const el = document.getElementById(state.modal.focus);
     if(el && document.activeElement !== el){ el.focus(); if(el.select) el.select(); }
@@ -1129,6 +1190,67 @@ function vueAnalyse(){
 }
 
 /* ============================================================
+   RÉCURRENCES
+   Ce qui repartira tout seul au prochain tour, et ce qu'il reste à payer.
+   ============================================================ */
+function vueRecurrences(){
+  const l = recActives();
+  const dep = l.filter(d => !estRevenu(d));
+  const rev = l.filter(estRevenu);
+  const parMoisDep = somme(dep);
+  const finies = dep.filter(d => recRestantes(d) !== Infinity);
+  const resteDu = finies.reduce((s,d) => s + recReste(d), 0);
+  const sansFin = dep.filter(d => recSansFin(d)).length;
+
+  let h = '<section class="total">' +
+    '<div class="total-lbl">Engagement mensuel</div>' +
+    '<span class="total-val num">' + esc(fmt(parMoisDep)) + '</span>' +
+    '<div class="total-bar"></div><div class="total-sub">' +
+    '<span><b>' + l.length + '</b> ' + (l.length > 1 ? "récurrences actives" : "récurrence active") + '</span>' +
+    (sansFin ? '<span><b>' + sansFin + '</b> sans fin</span>' : "") +
+    (resteDu ? '<span>reste à payer <b>' + esc(fmt(resteDu)) + '</b></span>' : "") +
+    (rev.length ? '<span class="c-ok">+<b class="c-ok">' + esc(fmt(somme(rev))) + '</b> de revenus</span>' : "") +
+    '</div></section>';
+
+  if(!l.length){
+    return h + '<div class="sect"><h2>Rien de récurrent</h2></div>' +
+      '<div class="ops"><div class="vide"><b>Aucune récurrence active</b>' +
+      'Coche « Tous les mois » ou « Plusieurs fois » en ajoutant une entrée : elle reviendra d\'elle-même à chaque clôture.</div></div>';
+  }
+
+  h += '<div class="sect"><h2>Actives</h2><div class="sp"></div>' +
+    '<span class="cnt">prochaine échéance</span></div><div class="ops">';
+
+  l.forEach(d => {
+    const inf = recSansFin(d);
+    const rv = estRevenu(d);
+    const passees = recPassees(d);
+    const restantes = recRestantes(d);
+    const total = d.rec.total || 1;
+    const sous = inf
+      ? "Sans date de fin · prochaine le " + frDate(d.date, true)
+      : passees + (passees > 1 ? " échéances passées" : " échéance passée") + " sur " + total +
+        " · " + restantes + (restantes > 1 ? " restantes" : " restante") +
+        " · prochaine le " + frDate(d.date, true);
+    const reste = recReste(d);
+    h += '<button class="prow" data-act="modifier-depense" data-id="' + d.id + '">' +
+      '<span class="pemo rec' + (inf ? " inf" : "") + '">' +
+        (inf ? "∞" : (d.rec.index||1) + "/" + total) + '</span>' +
+      '<span class="pmid"><span class="pname">' + esc(libelleDe(d)) + '</span>' +
+      '<span class="psub">' + esc(sous) + '</span></span>' +
+      '<span class="pmt"><span class="m' + (rv ? " rev" : "") + '">' + (rv ? "+" : "−") + fmt(d.montant) + '</span>' +
+      '<span class="r">' + (reste === Infinity ? "par mois" : "reste " + fmt(reste)) + '</span></span>' +
+      '<span class="pgo">' + svg("chev",16) + '</span></button>';
+  });
+  h += '</div>';
+
+  h += '<div class="aide" style="margin-top:14px">Touche une ligne pour la modifier. Pour l\'arrêter, ' +
+    'passe sa récurrence sur « Aucune » : l\'entrée du mois en cours reste, la suite ne viendra pas. ' +
+    'La suivante est créée au moment de la clôture.</div>';
+  return h;
+}
+
+/* ============================================================
    HISTORIQUE
    ============================================================ */
 function totalPeriode(pid){ return sommeDep(dePeriode(pid)); }
@@ -1296,10 +1418,17 @@ function vueModal(m){
     const rep = !!m.reporter;
     const dedans = rep ? list.filter(d => fut.indexOf(d) === -1) : list;
     const recs = dedans.filter(d => d.rec && (d.rec.mode !== "fois" || (d.rec.index||1) < (d.rec.total||1)));
+    const titre = (m.titre || "").trim() || m.defaut;
+    const dbl = titreDouble(titre);
+    const force = dbl && m.forcer === norm(titre);
     c = '<h3>Clôturer le mois</h3>' +
       '<div class="sous">Les entrées en cours partent dans l\'historique et l\'accueil repart de zéro.</div>' +
       '<div class="champ"><label for="m-titre">Nom du mois</label>' +
       '<input type="text" id="m-titre" autocomplete="off" placeholder="' + esc(m.defaut) + '" value="' + esc(m.titre || "") + '"></div>' +
+      (dbl ? '<div class="avert"><b>Ce nom est déjà pris.</b> « ' + esc(dbl.titre) + ' » existe dans l\'historique, ' +
+        'clôturé le ' + esc(quand(dbl.cloture)) + ' pour ' + esc(fmt(totalPeriode(dbl.id))) + '. ' +
+        'Deux mois portant le même nom deviennent impossibles à distinguer.' +
+        (force ? ' Touche à nouveau pour clôturer quand même.' : "") + '</div>' : "") +
       (fut.length ?
         '<button class="bascule' + (rep ? " on" : "") + '" data-act="bascule-report">' +
         '<span class="l">Reporter les entrées à venir' +
@@ -1313,23 +1442,35 @@ function vueModal(m){
         ' sur le mois suivant.' : "") + '</div>' +
       '<div class="btns" style="margin:20px 0 0">' +
       '<button class="btn" style="flex:0 0 auto" data-act="fermer-modal">Renoncer</button>' +
-      '<button class="btn pri" style="flex:1" data-act="cloture-ok"' + (dedans.length ? "" : " disabled") + '>Clôturer</button></div>';
+      '<button class="btn pri" style="flex:1" data-act="cloture-ok"' + (dedans.length ? "" : " disabled") + '>' +
+      (force ? "Clôturer quand même" : "Clôturer") + '</button></div>';
   }
   else if(m.type === "rouvrir"){
     const n = enCours().length;
     const eng = echeancesEngendrees(m.id).length;
+    const ecr = m.mode === "ecraser";
     c = '<h3>Annuler la clôture ?</h3>' +
       '<div class="sous">« ' + esc(m.titre) + ' » quitte l\'historique et ses ' + m.nb +
         (m.nb > 1 ? " entrées reviennent" : " entrée revient") + ' sur le mois en cours.</div>' +
-      (n ? '<div class="avert"><b>Attention.</b> Le mois en cours contient déjà ' + n +
-        (n > 1 ? " entrées" : " entrée") + '. Les deux vont se mélanger sur l\'accueil, et le budget sera calculé sur l\'ensemble.' +
-        (eng ? ' Les ' + eng + ' échéance' + (eng > 1 ? "s" : "") + ' que cette clôture avait engendrée' + (eng > 1 ? "s" : "") +
-          ' seront retirées, pour éviter les doublons.' : "") + '</div>'
+      (n ?
+        '<div class="champ"><label>Que faire du mois en cours ?</label><div class="seg" style="width:100%">' +
+          '<button style="flex:1" class="' + (!ecr ? "on" : "") + '" data-act="rouvrir-mode" data-id="melanger">Mélanger</button>' +
+          '<button style="flex:1" class="' + (ecr ? "on" : "") + '" data-act="rouvrir-mode" data-id="ecraser">Écraser</button>' +
+        '</div></div>' +
+        (ecr
+          ? '<div class="avert"><b>Attention.</b> Les ' + n + (n > 1 ? " entrées" : " entrée") +
+            ' du mois en cours seront supprimées, puis remplacées par celles de « ' + esc(m.titre) + ' ». ' +
+            'Tu pourras revenir en arrière depuis le bandeau qui suivra, le temps qu\'il reste affiché.</div>'
+          : '<div class="aide">Le mois en cours contient déjà ' + n + (n > 1 ? " entrées" : " entrée") +
+            '. Les deux lots vont se mélanger sur l\'accueil, et le budget portera sur l\'ensemble.' +
+            (eng ? ' Les ' + eng + ' échéance' + (eng > 1 ? "s" : "") + ' engendrée' + (eng > 1 ? "s" : "") +
+              ' par cette clôture seront retirées, pour éviter les doublons.' : "") + '</div>')
         : (eng ? '<div class="aide">Les ' + eng + ' échéance' + (eng > 1 ? "s engendrées" : " engendrée") +
             ' par cette clôture seront retirées, pour éviter les doublons.</div>' : "")) +
       '<div class="btns" style="margin:20px 0 0">' +
       '<button class="btn" style="flex:0 0 auto" data-act="fermer-modal">Renoncer</button>' +
-      '<button class="btn pri" style="flex:1" data-act="rouvrir-ok" data-id="' + m.id + '">Annuler la clôture</button></div>';
+      '<button class="btn ' + (ecr ? "dang" : "pri") + '" style="flex:1" data-act="rouvrir-ok" data-id="' + m.id + '">' +
+      (ecr ? "Écraser et annuler" : "Annuler la clôture") + '</button></div>';
   }
   else if(m.type === "renommer"){
     c = '<h3>Renommer le mois</h3>' +
@@ -1508,7 +1649,7 @@ document.addEventListener("click", async ev => {
 
   /* ---- entrées ---- */
   if(act === "nouvelle-depense"){
-    ouvrirModal({ type:"depense", date:todayISO(), sens:"depense", rec:"aucune", fois:"3", focus:"m-montant" });
+    ouvrirModal({ type:"depense", date:todayISO(), sens:"depense", rec:"aucune", fois:"3" });
     return;
   }
   if(act === "modifier-depense"){
@@ -1517,7 +1658,7 @@ document.addEventListener("click", async ev => {
     ouvrirModal({ type:"depense", id:d.id, montant:brut(d.montant), libelle:d.libelle,
       note:d.note || "", date:d.date, sens:estRevenu(d) ? "revenu" : "depense",
       rec:d.rec ? d.rec.mode : "aucune", fois:d.rec && d.rec.total ? String(d.rec.total) : "3",
-      recIndex:d.rec && d.rec.index || 1, focus:"m-montant" });
+      recIndex:d.rec && d.rec.index || 1 });
     return;
   }
   if(act === "sens"){ capturerModal(); state.modal.sens = id; render(); return; }
@@ -1573,7 +1714,7 @@ document.addEventListener("click", async ev => {
 
   /* ---- budget ---- */
   if(act === "modifier-budget"){
-    ouvrirModal({ type:"budget", montant: budget() ? brut(budget()) : "", focus:"m-montant" });
+    ouvrirModal({ type:"budget", montant: budget() ? brut(budget()) : "" });
     return;
   }
   if(act === "budget-enregistrer"){
@@ -1604,7 +1745,15 @@ document.addEventListener("click", async ev => {
     return;
   }
   if(act === "cloture-ok"){
-    const titre = (($("#m-titre") || {}).value || "").trim() || state.modal.defaut;
+    capturerModal();
+    const titre = (state.modal.titre || "").trim() || state.modal.defaut;
+    // Un nom déjà pris demande une confirmation explicite, une seule fois et
+    // pour ce nom-là : le changer remet le garde-fou en place.
+    if(titreDouble(titre) && state.modal.forcer !== norm(titre)){
+      state.modal.forcer = norm(titre);
+      render();
+      return;
+    }
     const r = cloturer(titre, !!state.modal.reporter);
     fermerModal();
     if(!r){ toast("Rien à clôturer"); return; }
@@ -1630,17 +1779,24 @@ document.addEventListener("click", async ev => {
   }
   if(act === "rouvrir-periode"){
     const p = DB.periodes[id];
-    if(p) ouvrirModal({ type:"rouvrir", id:p.id, titre:p.titre, nb:dePeriode(p.id).length });
+    if(p) ouvrirModal({ type:"rouvrir", id:p.id, titre:p.titre, nb:dePeriode(p.id).length, mode:"melanger" });
     return;
   }
+  if(act === "rouvrir-mode"){ state.modal.mode = id; render(); return; }
   if(act === "rouvrir-ok"){
     const p = DB.periodes[id];
     if(!p) return;
     const t = p.titre;
-    rouvrir(id);
+    const ecraser = state.modal.mode === "ecraser";
+    const supprimees = rouvrir(id, ecraser);
     state.periode = null; state.modal = null; state.tab = "accueil";
     render(); window.scrollTo(0,0);
-    toast("Clôture de « " + t + " » annulée");
+    if(supprimees.length){
+      corbeille = { depenses:supprimees, periodes:[] };
+      toast(supprimees.length + (supprimees.length > 1 ? " entrées écrasées" : " entrée écrasée"), "annuler-suppr");
+    }else{
+      toast("Clôture de « " + t + " » annulée");
+    }
     return;
   }
   if(act === "supprimer-periode"){

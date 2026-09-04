@@ -147,11 +147,17 @@ nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--voil
 .pname{display:block;font-weight:500;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   text-transform:capitalize}
 .psub{display:block;font-size:12px;color:var(--gris2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pbal{font-size:18px;font-weight:600;white-space:nowrap}
 .pemo.rec{border-color:var(--accB);color:var(--acc);background:var(--accF);font-size:12px}
 .pemo.rec.inf{font-size:19px}
+/* Une récurrence a plus à dire qu'un mois clôturé : sa ligne peut respirer sur
+   deux lignes plutôt que finir en points de suspension. */
+.prow.rec{align-items:flex-start}
+.prow.rec .pemo{margin-top:2px}
+.prow.rec .psub{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.4}
+.prow.rec .pmt{padding-top:2px}
 .prow .pmt{text-align:right;flex:0 0 auto}
 .prow .pmt .m{font-family:"IBM Plex Mono",monospace;font-size:14px;font-weight:500;white-space:nowrap;display:block}
+.prow .pmt .m.gros{font-size:17px;font-weight:600}
 .prow .pmt .r{font-size:11px;color:var(--gris2);font-family:"IBM Plex Mono",monospace;display:block;margin-top:2px}
 .prow .pmt .m.rev{color:var(--ok)}
 .pgo{color:var(--gris2);flex:0 0 auto;display:grid;place-items:center}
@@ -195,7 +201,6 @@ html[data-theme="sombre"] .chip.on{color:#0d0d10;background:var(--texte);border-
 .btn:active{background:var(--fond2)}
 .btn.pri{background:var(--acc);border-color:var(--acc);color:var(--surAcc)}
 .btn.dang{color:var(--dang);border-color:var(--dangF)}
-.btn.wide{width:100%}
 .btn[disabled]{opacity:.45;pointer-events:none}
 .btns{display:flex;gap:9px;flex-wrap:wrap;margin:14px 0}
 .btns.grow>*{flex:1}
@@ -324,9 +329,15 @@ html[data-theme="sombre"] .seg button.on{background:var(--texte);color:#0d0d10}
    Un seul fichier, aucune dépendance, stockage local (IndexedDB).
    ============================================================ */
 
-const VERSION = "1.3.0";
+const VERSION = "1.4.0";
 const SCHEMA  = 2;
 const JOURNAL = [
+  { v:"1.4.0", d:"2026-09-03", t:"Soldes et récurrences justes", l:[
+    "Le solde du mois — les dépenses moins les revenus — s'affiche sur l'accueil, sur chaque mois de l'historique et sur sa fiche. Un excédent se lit en vert, précédé d'un plus.",
+    "Analyse : « Tout » compte désormais les deux sens et donne leur solde, y compris dans les répartitions, où un revenu allège le libellé et le mois qu'il concerne. « Dépenses » reste seul à ignorer les revenus.",
+    "Correction du décompte des récurrences : « 2/3 » signifie deux échéances réglées sur trois, celle du mois en cours comprise, et une seule restante. Le décompte et le badge disaient l'inverse l'un de l'autre.",
+    "Le sous-titre d'une récurrence ne répète plus ce que dit le badge et peut tenir sur deux lignes : la date d'échéance n'est plus coupée."
+  ]},
   { v:"1.3.0", d:"2026-09-03", t:"Suivi des récurrences", l:[
     "Un onglet réunit les récurrences actives : le libellé, le sens, le rang atteint, les échéances passées sur le total, celles qui restent, et la date de la prochaine.",
     "En haut, l'engagement mensuel et ce qu'il reste à payer sur les paiements en plusieurs fois.",
@@ -748,24 +759,28 @@ function trierAnalyse(l, mode){
   return trier(c);
 }
 /* Regroupement par libellé : la clé est normalisée pour que « Pokémon » et
-   « pokemon » ne fassent qu'une ligne, l'affichage garde la première graphie. */
-function parLibelle(l){
+   « pokemon » ne fassent qu'une ligne, l'affichage garde la première graphie.
+   En mode « Tout », un revenu se soustrait — un remboursement allège la ligne
+   qu'il rembourse au lieu de la gonfler. */
+function parLibelle(l, net){
   const m = new Map();
   l.forEach(d => {
     const k = norm(libelleDe(d));
     const g = m.get(k) || { cle:k, nom:libelleDe(d), total:0, nb:0, dernier:"" };
-    g.total += d.montant; g.nb++;
+    g.total += (net && estRevenu(d)) ? -d.montant : d.montant;
+    g.nb++;
     if(d.date > g.dernier) g.dernier = d.date;
     m.set(k, g);
   });
   return [...m.values()].sort((a,b) => b.total - a.total);
 }
-function parMois(l){
+function parMois(l, net){
   const m = new Map();
   l.forEach(d => {
     const k = cleMois(d.date);
     const g = m.get(k) || { cle:k, total:0, nb:0 };
-    g.total += d.montant; g.nb++;
+    g.total += (net && estRevenu(d)) ? -d.montant : d.montant;
+    g.nb++;
     m.set(k, g);
   });
   return [...m.values()].sort((a,b) => (a.cle < b.cle ? 1 : -1));
@@ -862,13 +877,15 @@ function recActives(){
     .sort((a,b) => (a.date === b.date ? libelleDe(a).localeCompare(libelleDe(b)) : (a.date < b.date ? -1 : 1)));
 }
 const recSansFin = d => d.rec && d.rec.mode === "mensuel";
-/* Le rang courant n'est pas encore payé : les échéances passées sont celles
-   qui le précèdent. */
-function recPassees(d){ return d.rec && d.rec.mode === "fois" ? Math.max(0, (d.rec.index||1) - 1) : 0; }
+/* Le rang porté par l'entrée en cours est celui de l'échéance de ce mois-ci :
+   elle est déjà inscrite dans les dépenses du mois, donc déjà réglée du point
+   de vue du suivi. « 2/3 » veut dire deux réglées, une à venir — le badge et
+   le décompte disent la même chose. */
+function recFaites(d){ return d.rec && d.rec.mode === "fois" ? Math.min(d.rec.index||1, d.rec.total||1) : 0; }
 function recRestantes(d){
   if(!d.rec) return 0;
   if(d.rec.mode === "mensuel") return Infinity;
-  return Math.max(0, (d.rec.total||1) - (d.rec.index||1) + 1);
+  return Math.max(0, (d.rec.total||1) - (d.rec.index||1));
 }
 function recReste(d){
   const n = recRestantes(d);
@@ -1017,8 +1034,12 @@ function vueAccueil(){
 
   const sub = [];
   sub.push('<span><b>' + list.length + '</b> ' + (list.length > 1 ? "entrées" : "entrée") + '</span>');
+  // Le solde du mois : ce qui sort, moins ce qui rentre. Négatif, il devient
+  // un excédent, et se lit en vert.
+  const solde = tot - rev;
+  sub.push('<span>solde ' + (solde <= 0 ? '<b class="c-ok">' : "<b>") +
+    (solde < 0 ? "+" + fmt(-solde) : fmt(solde)) + '</b></span>');
   if(rev) sub.push('<span class="c-ok">+<b class="c-ok">' + esc(fmt(rev)) + '</b> de revenus</span>');
-  if(rev) sub.push('<span>net <b>' + esc(fmt(tot - rev)) + '</b></span>');
   if(totFut) sub.push('<span>dont <b>' + esc(fmt(totFut)) + '</b> à venir</span>');
   h += '<div class="total-sub">' + sub.join("") + '</div></section>';
 
@@ -1092,15 +1113,19 @@ function vueAnalyse(){
   const s = DB.settings;
   const q = state.q;
   const res = chercher(q, s.aPortee, s.aPeriode, s.aSens);
-  const tot = sommeDep(res);
-  const rev = sommeRev(res);
-  const globalTot = sommeDep(depensesAll());
-  const part = globalTot ? Math.round(tot / globalTot * 100) : 0;
-  const filtre = !!q || s.aPortee !== "tout" || s.aPeriode !== "tout" || s.aSens !== "tout";
-  // Les deux répartitions ne mélangent jamais les sens : une barre qui
-  // additionnerait un salaire et des courses ne voudrait rien dire.
-  const base = s.aSens === "rev" ? res.filter(estRevenu) : res.filter(d => !estRevenu(d));
-  const totBase = somme(base);
+  const sens = s.aSens;
+  const lesDep = res.filter(d => !estRevenu(d));
+  const lesRev = res.filter(estRevenu);
+  const totDep = somme(lesDep), totRev = somme(lesRev);
+  const solde = totDep - totRev;
+  const filtre = !!q || s.aPortee !== "tout" || s.aPeriode !== "tout" || sens !== "tout";
+  // « Tout » compte les deux sens et affiche leur solde. « Dépenses » ignore les
+  // revenus, « Revenus » ignore les dépenses.
+  const net = sens === "tout";
+  const base = sens === "rev" ? lesRev : sens === "dep" ? lesDep : res;
+  const valeur = sens === "rev" ? totRev : sens === "dep" ? totDep : solde;
+  const globalDep = sommeDep(depensesAll());
+  const part = globalDep ? Math.round(totDep / globalDep * 100) : 0;
 
   let h = '<div class="rech"><span class="lp">' + svg("loupe",17) + '</span>' +
     '<input type="text" id="a-q" autocomplete="off" autocapitalize="none" spellcheck="false" ' +
@@ -1109,30 +1134,33 @@ function vueAnalyse(){
     '</div>';
 
   h += '<div class="filtres">' +
-    rangeeChips("Sens", SENS, s.aSens, "a-sens") +
+    rangeeChips("Sens", SENS, sens, "a-sens") +
     rangeeChips("Portée", PORTEES, s.aPortee, "a-portee") +
     rangeeChips("Période", PERIODES, s.aPeriode, "a-periode") +
     rangeeChips("Tri", TRIS, s.aTri, "a-tri") + '</div>';
 
-  const mois = parMois(base);
+  const mois = parMois(base, net);
+  const totBase = mois.reduce((x,g) => x + g.total, 0);
   const moy = mois.length ? Math.round(totBase / mois.length) : 0;
-  const gros = base.reduce((m,d) => (d.montant > m ? d.montant : m), 0);
-  const revenus = s.aSens !== "rev" && rev;
+  const grosse = (sens === "rev" ? lesRev : lesDep).reduce((m,d) => (d.montant > m ? d.montant : m), 0);
+  // L'étiquette doit toujours nommer le chiffre affiché : un solde ne peut pas
+  // s'annoncer « tout ce qui est passé ».
+  const nom = sens === "rev" ? "Revenus" : sens === "dep" ? "Dépenses" : "Solde";
+  const etiquette = q ? nom + ' pour « ' + esc(q) + ' »'
+    : filtre ? nom + (sens === "rev" ? " filtrés" : sens === "dep" ? " filtrées" : " filtré")
+    : sens === "rev" ? "Tous les revenus" : sens === "dep" ? "Toutes les dépenses" : "Solde général";
 
   h += '<section class="total" style="padding:20px 0 18px">' +
-    '<div class="total-lbl">' +
-      (q ? (s.aSens === "rev" ? 'Revenus pour « ' : 'Total pour « ') + esc(q) + ' »'
-         : s.aSens === "rev" ? "Tous les revenus" : filtre ? "Total filtré" : "Tout ce qui est passé") +
-    '</div>' +
-    '<span class="total-val num ' + (s.aSens === "rev" ? "c-ok" : "") + '">' +
-      (s.aSens === "rev" ? "+" : "") + esc(fmt(s.aSens === "rev" ? rev : tot)) + '</span>' +
+    '<div class="total-lbl">' + etiquette + '</div>' +
+    '<span class="total-val num ' + (sens === "rev" || valeur < 0 ? "c-ok" : "") + '">' +
+      esc(sens === "rev" ? "+" + fmt(valeur) : valeur < 0 ? "+" + fmt(-valeur) : fmt(valeur)) + '</span>' +
     '<div class="total-bar"></div><div class="total-sub">' +
     '<span><b>' + res.length + '</b> ' + (res.length > 1 ? "entrées" : "entrée") + '</span>' +
+    (net && totRev ? '<span><b>' + esc(fmt(totDep)) + '</b> de dépenses</span>' +
+                     '<span class="c-ok">+<b class="c-ok">' + esc(fmt(totRev)) + '</b> de revenus</span>' : "") +
     (mois.length > 1 ? '<span><b>' + esc(fmt(moy)) + '</b> par mois</span>' : "") +
-    (base.length ? '<span>plus grosse <b>' + esc(fmt(gros)) + '</b></span>' : "") +
-    (revenus ? '<span class="c-ok">+<b class="c-ok">' + esc(fmt(rev)) + '</b> de revenus</span>' +
-               '<span>net <b>' + esc(fmt(tot - rev)) + '</b></span>' : "") +
-    (filtre && globalTot && s.aSens !== "rev" ? '<span><b>' + part + ' %</b> de tout</span>' : "") +
+    (grosse ? '<span>plus gros' + (sens === "rev" ? " revenu" : "se dépense") + ' <b>' + esc(fmt(grosse)) + '</b></span>' : "") +
+    (filtre && globalDep && sens !== "rev" ? '<span><b>' + part + ' %</b> des dépenses</span>' : "") +
     '</div></section>';
 
   if(!res.length){
@@ -1141,18 +1169,25 @@ function vueAnalyse(){
       '</div></div>';
   }
 
+  // Une barre représente une grandeur, jamais un signe : elle se mesure en
+  // valeur absolue, et c'est la couleur du montant qui dit le sens.
+  const large = (v, max) => Math.max(2, Math.round(Math.abs(v) / (max||1) * 100));
+  const mtGroupe = v => v < 0
+    ? '<span class="g-t c-ok">+' + esc(fmt(-v)) + '</span>'
+    : '<span class="g-t">' + esc(fmt(v)) + '</span>';
+
   // Répartition par libellé
-  const gl = parLibelle(base);
+  const gl = parLibelle(base, net);
   if(gl.length){
-    const maxL = gl[0].total || 1;
+    const maxL = gl.reduce((m,g) => Math.max(m, Math.abs(g.total)), 1);
     const visibles = state.groupes ? gl : gl.slice(0, 6);
     h += '<div class="sect"><h2>Par libellé</h2><div class="sp"></div>' +
       '<span class="cnt">' + gl.length + (gl.length > 1 ? " libellés" : " libellé") + '</span></div><div class="ops">';
     visibles.forEach(g => {
       h += '<button class="grp' + (norm(q) === g.cle ? " on" : "") + '" data-act="chercher-libelle" data-id="' + esc(g.nom) + '">' +
         '<span class="g-mid"><span class="g-n">' + esc(g.nom) + '</span>' +
-        '<span class="g-b"><i style="width:' + Math.max(2, Math.round(g.total / maxL * 100)) + '%"></i></span></span>' +
-        '<span class="g-r"><span class="g-t">' + esc(fmt(g.total)) + '</span>' +
+        '<span class="g-b"><i style="width:' + large(g.total, maxL) + '%"></i></span></span>' +
+        '<span class="g-r">' + mtGroupe(g.total) +
         '<span class="g-c">' + g.nb + '×</span></span></button>';
     });
     if(gl.length > 6)
@@ -1164,12 +1199,12 @@ function vueAnalyse(){
   // Répartition par mois
   if(mois.length > 1){
     const douze = mois.slice(0, 12);
-    const maxM = douze.reduce((m,g) => (g.total > m ? g.total : m), 1);
+    const maxM = douze.reduce((m,g) => Math.max(m, Math.abs(g.total)), 1);
     h += '<div class="sect"><h2>Par mois</h2></div><div class="ops">';
     douze.forEach(g => {
       h += '<div class="grp"><span class="g-mid"><span class="g-n">' + esc(cap(libelleMois(g.cle))) + '</span>' +
-        '<span class="g-b"><i style="width:' + Math.max(2, Math.round(g.total / maxM * 100)) + '%"></i></span></span>' +
-        '<span class="g-r"><span class="g-t">' + esc(fmt(g.total)) + '</span>' +
+        '<span class="g-b"><i style="width:' + large(g.total, maxM) + '%"></i></span></span>' +
+        '<span class="g-r">' + mtGroupe(g.total) +
         '<span class="g-c">' + g.nb + '×</span></span></div>';
     });
     h += '</div>';
@@ -1198,8 +1233,8 @@ function vueRecurrences(){
   const dep = l.filter(d => !estRevenu(d));
   const rev = l.filter(estRevenu);
   const parMoisDep = somme(dep);
-  const finies = dep.filter(d => recRestantes(d) !== Infinity);
-  const resteDu = finies.reduce((s,d) => s + recReste(d), 0);
+  const bornees = dep.filter(d => recRestantes(d) !== Infinity);
+  const resteDu = bornees.reduce((s,d) => s + recReste(d), 0);
   const sansFin = dep.filter(d => recSansFin(d)).length;
 
   let h = '<section class="total">' +
@@ -1208,7 +1243,7 @@ function vueRecurrences(){
     '<div class="total-bar"></div><div class="total-sub">' +
     '<span><b>' + l.length + '</b> ' + (l.length > 1 ? "récurrences actives" : "récurrence active") + '</span>' +
     (sansFin ? '<span><b>' + sansFin + '</b> sans fin</span>' : "") +
-    (resteDu ? '<span>reste à payer <b>' + esc(fmt(resteDu)) + '</b></span>' : "") +
+    (resteDu ? '<span>reste à venir <b>' + esc(fmt(resteDu)) + '</b></span>' : "") +
     (rev.length ? '<span class="c-ok">+<b class="c-ok">' + esc(fmt(somme(rev))) + '</b> de revenus</span>' : "") +
     '</div></section>';
 
@@ -1218,35 +1253,35 @@ function vueRecurrences(){
       'Coche « Tous les mois » ou « Plusieurs fois » en ajoutant une entrée : elle reviendra d\'elle-même à chaque clôture.</div></div>';
   }
 
-  h += '<div class="sect"><h2>Actives</h2><div class="sp"></div>' +
-    '<span class="cnt">prochaine échéance</span></div><div class="ops">';
+  h += '<div class="sect"><h2>Actives</h2></div><div class="ops">';
 
   l.forEach(d => {
     const inf = recSansFin(d);
     const rv = estRevenu(d);
-    const passees = recPassees(d);
     const restantes = recRestantes(d);
-    const total = d.rec.total || 1;
-    const sous = inf
-      ? "Sans date de fin · prochaine le " + frDate(d.date, true)
-      : passees + (passees > 1 ? " échéances passées" : " échéance passée") + " sur " + total +
-        " · " + restantes + (restantes > 1 ? " restantes" : " restante") +
-        " · prochaine le " + frDate(d.date, true);
+    // Le badge dit déjà « ∞ » ou « 2/3 » : la ligne du dessous n'a pas à le
+    // répéter, elle sert à dire quand tombe l'échéance et ce qu'il reste.
+    const echeance = d.date > todayISO()
+      ? "Prochaine le " + frDate(d.date, true)
+      : "Échéance de ce mois le " + frDate(d.date, true);
+    const sous = inf ? echeance
+      : (restantes ? restantes + (restantes > 1 ? " autres après" : " autre après") + " · " : "Dernière · ") + echeance;
     const reste = recReste(d);
-    h += '<button class="prow" data-act="modifier-depense" data-id="' + d.id + '">' +
+    h += '<button class="prow rec" data-act="modifier-depense" data-id="' + d.id + '">' +
       '<span class="pemo rec' + (inf ? " inf" : "") + '">' +
-        (inf ? "∞" : (d.rec.index||1) + "/" + total) + '</span>' +
+        (inf ? "∞" : recFaites(d) + "/" + (d.rec.total||1)) + '</span>' +
       '<span class="pmid"><span class="pname">' + esc(libelleDe(d)) + '</span>' +
       '<span class="psub">' + esc(sous) + '</span></span>' +
       '<span class="pmt"><span class="m' + (rv ? " rev" : "") + '">' + (rv ? "+" : "−") + fmt(d.montant) + '</span>' +
-      '<span class="r">' + (reste === Infinity ? "par mois" : "reste " + fmt(reste)) + '</span></span>' +
-      '<span class="pgo">' + svg("chev",16) + '</span></button>';
+      '<span class="r">' + (reste === Infinity ? "par mois" : reste ? "reste " + fmt(reste) : "soldée") + '</span></span>' +
+      '</button>';
   });
   h += '</div>';
 
-  h += '<div class="aide" style="margin-top:14px">Touche une ligne pour la modifier. Pour l\'arrêter, ' +
-    'passe sa récurrence sur « Aucune » : l\'entrée du mois en cours reste, la suite ne viendra pas. ' +
-    'La suivante est créée au moment de la clôture.</div>';
+  h += '<div class="aide" style="margin-top:14px">Le badge donne le rang atteint : « ∞ » pour un abonnement, ' +
+    '« 2/3 » pour la deuxième échéance sur trois, celle du mois en cours comprise. ' +
+    'Touche une ligne pour la modifier ; pour l\'arrêter, passe sa récurrence sur « Aucune ». ' +
+    'La suivante naît au moment de la clôture.</div>';
   return h;
 }
 
@@ -1255,6 +1290,11 @@ function vueRecurrences(){
    ============================================================ */
 function totalPeriode(pid){ return sommeDep(dePeriode(pid)); }
 function revenusPeriode(pid){ return sommeRev(dePeriode(pid)); }
+/* Le solde s'écrit toujours pareil : positif on a dépensé plus qu'encaissé,
+   négatif c'est un excédent, qu'on montre avec un plus et en vert. */
+function fmtSolde(v){
+  return '<b class="' + (v <= 0 ? "c-ok" : "") + '">' + esc(v < 0 ? "+" + fmt(-v) : fmt(v)) + '</b>';
+}
 
 function vueHistorique(){
   const l = periodesAll().sort((a,b) => (b.cloture||0) - (a.cloture||0));
@@ -1270,7 +1310,8 @@ function vueHistorique(){
     '<div class="total-bar"></div>' +
     '<div class="total-sub"><span><b>' + l.length + '</b> ' + (l.length > 1 ? "mois clôturés" : "mois clôturé") + '</span>' +
     (l.length ? '<span>moyenne <b>' + esc(fmt(moy)) + '</b> par mois</span>' : "") +
-    (rev ? '<span class="c-ok">+<b class="c-ok">' + esc(fmt(rev)) + '</b> de revenus</span>' : "") +
+    (rev ? '<span class="c-ok">+<b class="c-ok">' + esc(fmt(rev)) + '</b> de revenus</span>' +
+           '<span>solde ' + fmtSolde(tot - rev) + '</span>' : "") +
     '</div></section>';
 
   h += '<div class="sect"><h2>Mois clôturés</h2></div>';
@@ -1290,8 +1331,9 @@ function vueHistorique(){
       '<span class="psub">' + n + (n > 1 ? " entrées" : " entrée") +
       (r ? " · +" + esc(fmt(r)) + " de revenus" : "") +
       (p.budget ? " · budget " + esc(fmt(p.budget)) : "") + '</span></span>' +
-      '<span class="pbal num ' + (e ? CL[e] : "") + '">' + esc(fmt(t)) + '</span>' +
-      '<span class="pgo">' + svg("chev",16) + '</span></button>';
+      '<span class="pmt"><span class="m gros ' + (e ? CL[e] : "") + '">' + esc(fmt(t)) + '</span>' +
+      (r ? '<span class="r">solde ' + esc(t - r < 0 ? "+" + fmt(r - t) : fmt(t - r)) + '</span>' : "") +
+      '</span><span class="pgo">' + svg("chev",16) + '</span></button>';
   });
   return h + '</div>';
 }
@@ -1314,7 +1356,7 @@ function vuePeriode(p){
     blocBudget(tot, p.budget, true) +
     '<div class="total-sub"><span><b>' + list.length + '</b> ' + (list.length > 1 ? "entrées" : "entrée") + '</span>' +
     (rev ? '<span class="c-ok">+<b class="c-ok">' + esc(fmt(rev)) + '</b> de revenus</span>' +
-           '<span>net <b>' + esc(fmt(tot - rev)) + '</b></span>' : "") +
+           '<span>solde ' + fmtSolde(tot - rev) + '</span>' : "") +
     '<span>du ' + esc(frDate(p.debut, true)) + ' au ' + esc(frDate(p.fin, true)) + '</span>' +
     '<span>clôturé le ' + esc(quand(p.cloture)) + '</span></div></section>';
 

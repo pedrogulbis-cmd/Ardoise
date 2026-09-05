@@ -154,6 +154,7 @@ nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--voil
 .prow.rec{align-items:flex-start}
 .prow.rec .pemo{margin-top:2px}
 .prow.rec .psub{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.4}
+.psub2{display:block;font-size:12px;color:var(--gris2);margin-top:7px;line-height:1.4}
 .prow.rec .pmt{padding-top:2px}
 .prow .pmt{text-align:right;flex:0 0 auto}
 .prow .pmt .m{font-family:"IBM Plex Mono",monospace;font-size:14px;font-weight:500;white-space:nowrap;display:block}
@@ -329,9 +330,15 @@ html[data-theme="sombre"] .seg button.on{background:var(--texte);color:#0d0d10}
    Un seul fichier, aucune dépendance, stockage local (IndexedDB).
    ============================================================ */
 
-const VERSION = "1.4.0";
+const VERSION = "1.4.1";
 const SCHEMA  = 2;
 const JOURNAL = [
+  { v:"1.4.1", d:"2026-09-04", t:"Lisibilité", l:[
+    "Récurrences : la ligne annonce la prochaine échéance, plus celle du mois en cours. Toutes commencent donc par la même information, abonnements comme séries bornées.",
+    "Le décompte des échéances restantes passe sur une seconde ligne, détachée de la date.",
+    "Historique : la moyenne précise qu'elle porte sur les dépenses, et la moyenne du solde par mois vient à côté.",
+    "Le montant des revenus disparaît du bloc des moyennes, où il n'était pas à sa place."
+  ]},
   { v:"1.4.0", d:"2026-09-03", t:"Soldes et récurrences justes", l:[
     "Le solde du mois — les dépenses moins les revenus — s'affiche sur l'accueil, sur chaque mois de l'historique et sur sa fiche. Un excédent se lit en vert, précédé d'un plus.",
     "Analyse : « Tout » compte désormais les deux sens et donne leur solde, y compris dans les répartitions, où un revenu allège le libellé et le mois qu'il concerne. « Dépenses » reste seul à ignorer les revenus.",
@@ -891,6 +898,15 @@ function recReste(d){
   const n = recRestantes(d);
   return n === Infinity ? Infinity : n * d.montant;
 }
+/* La date portée par l'entrée est celle de l'échéance en cours. Ce qui
+   intéresse dans le suivi, c'est la suivante : celle de ce mois si elle n'est
+   pas encore tombée, sinon celle du mois d'après. Une série achevée n'en a
+   plus, et renvoie une chaîne vide. */
+function recProchaine(d){
+  if(!d.rec) return "";
+  if(d.rec.mode === "fois" && recRestantes(d) === 0) return "";
+  return d.date > todayISO() ? d.date : plusMois(d.date, 1);
+}
 /* Un titre de mois déjà pris : la clôture doit prévenir avant de créer un
    doublon qu'on ne saura plus distinguer dans l'historique. */
 function titreDouble(t){
@@ -1259,19 +1275,22 @@ function vueRecurrences(){
     const inf = recSansFin(d);
     const rv = estRevenu(d);
     const restantes = recRestantes(d);
-    // Le badge dit déjà « ∞ » ou « 2/3 » : la ligne du dessous n'a pas à le
-    // répéter, elle sert à dire quand tombe l'échéance et ce qu'il reste.
-    const echeance = d.date > todayISO()
-      ? "Prochaine le " + frDate(d.date, true)
-      : "Échéance de ce mois le " + frDate(d.date, true);
-    const sous = inf ? echeance
-      : (restantes ? restantes + (restantes > 1 ? " autres après" : " autre après") + " · " : "Dernière · ") + echeance;
+    const total = d.rec.total || 1;
+    const suiv = recProchaine(d);
+    // Première ligne identique pour toutes les récurrences : quand tombe la
+    // prochaine. Seules les séries bornées ajoutent leur décompte en dessous.
+    const l1 = suiv ? "Prochaine le " + frDate(suiv, true)
+                    : "Dernière le " + frDate(d.date, true);
+    const l2 = inf ? ""
+      : restantes ? restantes + (restantes > 1 ? " échéances restantes" : " échéance restante") + " sur " + total
+      : "Série terminée après celle-ci";
     const reste = recReste(d);
     h += '<button class="prow rec" data-act="modifier-depense" data-id="' + d.id + '">' +
       '<span class="pemo rec' + (inf ? " inf" : "") + '">' +
-        (inf ? "∞" : recFaites(d) + "/" + (d.rec.total||1)) + '</span>' +
+        (inf ? "∞" : recFaites(d) + "/" + total) + '</span>' +
       '<span class="pmid"><span class="pname">' + esc(libelleDe(d)) + '</span>' +
-      '<span class="psub">' + esc(sous) + '</span></span>' +
+      '<span class="psub">' + esc(l1) + '</span>' +
+      (l2 ? '<span class="psub2">' + esc(l2) + '</span>' : "") + '</span>' +
       '<span class="pmt"><span class="m' + (rv ? " rev" : "") + '">' + (rv ? "+" : "−") + fmt(d.montant) + '</span>' +
       '<span class="r">' + (reste === Infinity ? "par mois" : reste ? "reste " + fmt(reste) : "soldée") + '</span></span>' +
       '</button>';
@@ -1281,7 +1300,7 @@ function vueRecurrences(){
   h += '<div class="aide" style="margin-top:14px">Le badge donne le rang atteint : « ∞ » pour un abonnement, ' +
     '« 2/3 » pour la deuxième échéance sur trois, celle du mois en cours comprise. ' +
     'Touche une ligne pour la modifier ; pour l\'arrêter, passe sa récurrence sur « Aucune ». ' +
-    'La suivante naît au moment de la clôture.</div>';
+    'La prochaine naît au moment de la clôture.</div>';
   return h;
 }
 
@@ -1303,15 +1322,16 @@ function vueHistorique(){
   // La moyenne est celle des dépenses : un revenu encaissé un mois ne doit pas
   // donner l'illusion d'avoir moins dépensé.
   const moy = l.length ? Math.round(tot / l.length) : 0;
+  const moySolde = l.length ? Math.round((tot - rev) / l.length) : 0;
 
   let h = '<section class="total">' +
     '<div class="total-lbl">Total historique</div>' +
     '<span class="total-val num">' + esc(fmt(tot)) + '</span>' +
     '<div class="total-bar"></div>' +
     '<div class="total-sub"><span><b>' + l.length + '</b> ' + (l.length > 1 ? "mois clôturés" : "mois clôturé") + '</span>' +
-    (l.length ? '<span>moyenne <b>' + esc(fmt(moy)) + '</b> par mois</span>' : "") +
-    (rev ? '<span class="c-ok">+<b class="c-ok">' + esc(fmt(rev)) + '</b> de revenus</span>' +
-           '<span>solde ' + fmtSolde(tot - rev) + '</span>' : "") +
+    (l.length ? '<span>moyenne des dépenses <b>' + esc(fmt(moy)) + '</b> par mois</span>' +
+                '<span>moyenne du solde ' + fmtSolde(moySolde) + ' par mois</span>' : "") +
+    (rev ? '<span>solde total ' + fmtSolde(tot - rev) + '</span>' : "") +
     '</div></section>';
 
   h += '<div class="sect"><h2>Mois clôturés</h2></div>';

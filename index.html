@@ -76,8 +76,10 @@ header.top{position:sticky;top:0;z-index:30;background:var(--voile);
   font-size:13px;font-weight:500;letter-spacing:-.01em;white-space:nowrap}
 .esp:active{background:var(--fond2)}
 .esp.fam{border-color:var(--accB);background:var(--accF);color:var(--acc)}
+#esp-slot{display:inline-flex;align-items:center;gap:7px}
 .iconbtn{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;
   border:1px solid var(--trait);color:var(--texte);background:var(--carte)}
+.iconbtn.on{border-color:var(--accB);background:var(--accF);color:var(--acc)}
 .iconbtn:active{background:var(--fond2)}
 .iconbtn.pri{background:var(--acc);border-color:var(--acc);color:var(--surAcc)}
 
@@ -252,6 +254,12 @@ textarea{resize:vertical;min-height:44px;line-height:1.45;font-family:inherit}
 .raccourcis button{font-size:12.5px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait);
   color:var(--gris);background:var(--carte);font-family:"IBM Plex Mono",monospace}
 .aide{font-size:12px;color:var(--gris2);margin-top:6px}
+.btn.wide{width:100%}
+/* Une ligne de réglage transformée en bouton de choix : même mise en page,
+   mais cliquable d'un bout à l'autre. */
+.mdl .lig{border-top:1px solid var(--trait2);padding:12px 0;align-items:center}
+.mdl .lig .l{display:block}
+.mdl .lig .d{display:block;font-size:12px;color:var(--gris);margin-top:2px}
 .bascule{display:flex;align-items:center;gap:11px;padding:11px 12px;border:1px solid var(--trait);
   border-radius:10px;margin:12px 0;text-align:left;width:100%}
 .bascule .l{flex:1;min-width:0;font-size:13.5px}
@@ -339,9 +347,21 @@ html[data-theme="sombre"] .seg button.on{background:var(--texte);color:#0d0d10}
    Un seul fichier, aucune dépendance, stockage local (IndexedDB).
    ============================================================ */
 
-const VERSION = "1.5.0";
+const VERSION = "1.6.0";
 const SCHEMA  = 3;
 const JOURNAL = [
+  { v:"1.6.0", d:"2026-09-04", t:"Masquer les montants", l:[
+    "Un œil en haut de l'écran, à gauche de l'ardoise, remplace tous les montants par des points. Les libellés, les notes, les dates et les lignes restent lisibles : on peut montrer l'application sans montrer ses chiffres.",
+    "Les jauges de budget et les barres de répartition se vident aussi, et les couleurs du budget s'éteignent : une longueur ou une pastille rouge en disent autant qu'un nombre.",
+    "La saisie reste toujours en clair — on doit voir ce qu'on tape. Seul l'écran rendu est masqué.",
+    "Le masquage survit à la fermeture de l'application, et vaut pour les deux ardoises."
+  ]},
+  { v:"1.5.1", d:"2026-09-04", t:"Sauvegardes par ardoise", l:[
+    "Exporter propose trois portées : les deux ardoises, le perso seul, ou la famille seule. Chacune annonce ce qu'elle emporte avant de créer le fichier.",
+    "Le nom du fichier porte la portée — ardoise-perso-20260904.json — et le budget de l'ardoise écartée n'est pas du voyage.",
+    "À la restauration, chaque entrée retrouve son ardoise d'origine : importer une sauvegarde perso ne touche pas à la famille.",
+    "Les sauvegardes antérieures se restaurent toujours, leurs entrées rejoignant le perso."
+  ]},
   { v:"1.5.0", d:"2026-09-04", t:"Deux ardoises", l:[
     "Un bouton en haut de l'écran, à gauche du plus, fait passer de l'ardoise perso à l'ardoise famille et retour.",
     "Les deux sont étanches : chacune a ses entrées, son budget, ses clôtures, son historique, ses récurrences et son analyse. Rien ne se mélange, rien ne se cumule.",
@@ -462,7 +482,14 @@ function cents(txt){
   return isNaN(v) ? 0 : Math.round(v*100);
 }
 let _nf = null;
+/* Masquer les chiffres passe par le seul endroit où un montant devient du
+   texte : tout ce qui s'affiche traverse fmt(), rien ne peut donc échapper au
+   masque. La saisie, elle, utilise brut() et reste toujours lisible — on doit
+   voir ce qu'on tape. */
+const MASQUE = "••••";
+const masque = () => !!DB.settings.masque;
 function fmt(c){
+  if(masque()) return MASQUE;
   if(!_nf) _nf = new Intl.NumberFormat("fr-FR", { style:"currency", currency:"EUR" });
   return _nf.format((c||0)/100);
 }
@@ -538,7 +565,9 @@ const ICONES = {
   loupe:'<circle cx="10.8" cy="10.8" r="6.3"/><path d="M15.4 15.4 20 20"/>',
   boucle:'<path d="M17 3.5 20.5 7 17 10.5"/><path d="M3.5 13v-2a4 4 0 0 1 4-4h13"/><path d="M7 20.5 3.5 17 7 13.5"/><path d="M20.5 11v2a4 4 0 0 1-4 4h-13"/>',
   perso:'<circle cx="12" cy="8" r="3.6"/><path d="M5.2 20c0-3.5 3-5.4 6.8-5.4S18.8 16.5 18.8 20"/>',
-  famille:'<circle cx="8.6" cy="8.4" r="3"/><circle cx="16.8" cy="9.6" r="2.3"/><path d="M2.6 19.6c0-3.1 2.7-4.8 6-4.8s6 1.7 6 4.8"/><path d="M16.4 14.4c2.8 0 4.9 1.5 4.9 4.3"/>'
+  famille:'<circle cx="8.6" cy="8.4" r="3"/><circle cx="16.8" cy="9.6" r="2.3"/><path d="M2.6 19.6c0-3.1 2.7-4.8 6-4.8s6 1.7 6 4.8"/><path d="M16.4 14.4c2.8 0 4.9 1.5 4.9 4.3"/>',
+  oeil:'<path d="M2.4 12S6 5.8 12 5.8 21.6 12 21.6 12 18 18.2 12 18.2 2.4 12 2.4 12z"/><circle cx="12" cy="12" r="3"/>',
+  oeilBarre:'<path d="M3.6 3.6 20.4 20.4"/><path d="M9.7 5.9A9.7 9.7 0 0 1 12 5.8c6 0 9.6 6.2 9.6 6.2a17.5 17.5 0 0 1-3.7 4.3"/><path d="M6.4 7.8A17.4 17.4 0 0 0 2.4 12S6 18.2 12 18.2c1.2 0 2.4-.2 3.4-.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>'
 };
 /* Le sigle : les bâtons de l'ardoise du café, barrés par le cinquième trait.
    Il se peint avec les variables du thème, donc il suit l'accent sans être
@@ -565,8 +594,8 @@ function svg(n, t, sw){
 const DEFAULTS = {
   version:SCHEMA, depenses:{}, periodes:{},
   settings:{ theme:"clair", accent:ACCENTS[0][0], budget:0, budgetFam:0, espace:"perso",
-             reporterFuturs:true, accTri:"recent", aPortee:"tout", aPeriode:"tout",
-             aTri:"recent", aSens:"tout" },
+             masque:false, reporterFuturs:true, accTri:"recent", aPortee:"tout",
+             aPeriode:"tout", aTri:"recent", aSens:"tout" },
   meta:{ cree:Date.now(), modifie:0, exporte:0, vue:null }
 };
 let DB = JSON.parse(JSON.stringify(DEFAULTS));
@@ -673,9 +702,13 @@ function assembler(k){
    entrées absentes sont ajoutées. Les identifiants font foi. */
 function fusionnerSauvegarde(x){
   if(!x || !x.depenses) throw new Error("format inattendu");
-  let nd = 0, np = 0;
+  let nd = 0, np = 0, perso = 0, famille = 0;
   Object.entries(x.periodes||{}).forEach(([k,v]) => { if(!DB.periodes[k]){ DB.periodes[k] = v; np++; } });
-  Object.entries(x.depenses||{}).forEach(([k,v]) => { if(!DB.depenses[k]){ DB.depenses[k] = v; nd++; } });
+  Object.entries(x.depenses||{}).forEach(([k,v]) => {
+    if(DB.depenses[k]) return;
+    DB.depenses[k] = v; nd++;
+    if(ardoiseDe(v) === "famille") famille++; else perso++;
+  });
   // Une dépense rattachée à un mois absent retomberait dans le vide : on la
   // remet en cours plutôt que de la perdre.
   Object.values(DB.depenses).forEach(d => { if(d.periode && !DB.periodes[d.periode]) d.periode = ""; });
@@ -684,7 +717,7 @@ function fusionnerSauvegarde(x){
     if(!DB.settings.budgetFam && x.settings.budgetFam) DB.settings.budgetFam = x.settings.budgetFam;
   }
   toutSalir();
-  return { nd, np };
+  return { nd, np, perso, famille };
 }
 
 /* ============================================================
@@ -750,9 +783,10 @@ function grouperTri(l, mode){
   return g;
 }
 /* L'état du budget : vert tant qu'il reste de la marge, orange à l'approche,
-   rouge à partir de 95 % — dépassement compris. */
+   rouge à partir de 95 % — dépassement compris. Masqué, il ne renvoie rien :
+   une pastille rouge dirait à elle seule où en est le budget. */
 function etatBudget(tot, b){
-  if(!b) return null;
+  if(!b || masque()) return null;
   const r = tot / b;
   if(r >= .95) return "dang";
   if(r >= .75) return "att";
@@ -1007,11 +1041,17 @@ function dessiner(){
 
   const slot = document.getElementById("esp-slot");
   if(slot){
-    const f = estFamille();
-    slot.innerHTML = '<button class="esp' + (f ? " fam" : "") + '" data-act="basculer-espace" ' +
-      'title="Passer sur l\'ardoise ' + (f ? "perso" : "famille") + '" ' +
-      'aria-label="Ardoise ' + (f ? "famille" : "perso") + ', toucher pour changer">' +
-      svg(f ? "famille" : "perso", 17) + '<span>' + (f ? "Famille" : "Perso") + '</span></button>';
+    const f = estFamille(), mq = masque();
+    slot.innerHTML =
+      '<button class="iconbtn' + (mq ? " on" : "") + '" data-act="basculer-masque" ' +
+        'title="' + (mq ? "Réafficher les montants" : "Masquer les montants") + '" ' +
+        'aria-label="' + (mq ? "Montants masqués, toucher pour les réafficher"
+                             : "Masquer les montants") + '">' +
+        svg(mq ? "oeilBarre" : "oeil", 17) + '</button>' +
+      '<button class="esp' + (f ? " fam" : "") + '" data-act="basculer-espace" ' +
+        'title="Passer sur l\'ardoise ' + (f ? "perso" : "famille") + '" ' +
+        'aria-label="Ardoise ' + (f ? "famille" : "perso") + ', toucher pour changer">' +
+        svg(f ? "famille" : "perso", 17) + '<span>' + (f ? "Famille" : "Perso") + '</span></button>';
   }
 
   // Le champ de recherche est redessiné à chaque frappe : sans cela, le
@@ -1081,9 +1121,12 @@ function blocBudget(tot, b, compact){
   const pc = Math.min(100, Math.round(tot / b * 100));
   const reste = b - tot;
   return '<div class="bud"><div class="bud-l">' +
-    '<span class="' + CL[e] + '">' + esc(fmt(tot)) + '</span><span>sur ' + esc(fmt(b)) + '</span>' +
-    '<span class="r ' + CL[e] + '">' + (reste >= 0 ? "reste " + fmt(reste) : "+" + fmt(-reste)) + '</span>' +
-    '</div><div class="bud-b"><i class="' + e + '" style="width:' + pc + '%"></i></div></div>';
+    '<span class="' + (e ? CL[e] : "") + '">' + esc(fmt(tot)) + '</span><span>sur ' + esc(fmt(b)) + '</span>' +
+    '<span class="r ' + (e ? CL[e] : "") + '">' + (reste >= 0 ? "reste " + fmt(reste) : "+" + fmt(-reste)) + '</span>' +
+    // La longueur de la jauge est un chiffre déguisé : masquée, elle disparaît
+    // et ne laisse que son rail vide.
+    '</div><div class="bud-b">' +
+    (masque() ? "" : '<i class="' + e + '" style="width:' + pc + '%"></i>') + '</div></div>';
 }
 
 const TRIS_ACC = [["recent","Récent"],["ancien","Ancien"],["montant","Montant ↓"],["montantA","Montant ↑"]];
@@ -1237,7 +1280,7 @@ function vueAnalyse(){
                      '<span class="c-ok">+<b class="c-ok">' + esc(fmt(totRev)) + '</b> de revenus</span>' : "") +
     (mois.length > 1 ? '<span><b>' + esc(fmt(moy)) + '</b> par mois</span>' : "") +
     (grosse ? '<span>plus gros' + (sens === "rev" ? " revenu" : "se dépense") + ' <b>' + esc(fmt(grosse)) + '</b></span>' : "") +
-    (filtre && globalDep && sens !== "rev" ? '<span><b>' + part + ' %</b> des dépenses</span>' : "") +
+    (filtre && globalDep && sens !== "rev" && !masque() ? '<span><b>' + part + ' %</b> des dépenses</span>' : "") +
     '</div></section>';
 
   if(!res.length){
@@ -1248,7 +1291,10 @@ function vueAnalyse(){
 
   // Une barre représente une grandeur, jamais un signe : elle se mesure en
   // valeur absolue, et c'est la couleur du montant qui dit le sens.
-  const large = (v, max) => Math.max(2, Math.round(Math.abs(v) / (max||1) * 100));
+  // Une barre de répartition dit une proportion : masquée, elle laisse un rail
+  // vide plutôt qu'un indice.
+  const barre = (v, max) => masque() ? ""
+    : '<i style="width:' + Math.max(2, Math.round(Math.abs(v) / (max||1) * 100)) + '%"></i>';
   const mtGroupe = v => v < 0
     ? '<span class="g-t c-ok">+' + esc(fmt(-v)) + '</span>'
     : '<span class="g-t">' + esc(fmt(v)) + '</span>';
@@ -1263,7 +1309,7 @@ function vueAnalyse(){
     visibles.forEach(g => {
       h += '<button class="grp' + (norm(q) === g.cle ? " on" : "") + '" data-act="chercher-libelle" data-id="' + esc(g.nom) + '">' +
         '<span class="g-mid"><span class="g-n">' + esc(g.nom) + '</span>' +
-        '<span class="g-b"><i style="width:' + large(g.total, maxL) + '%"></i></span></span>' +
+        '<span class="g-b">' + barre(g.total, maxL) + '</span></span>' +
         '<span class="g-r">' + mtGroupe(g.total) +
         '<span class="g-c">' + g.nb + '×</span></span></button>';
     });
@@ -1280,7 +1326,7 @@ function vueAnalyse(){
     h += '<div class="sect"><h2>Par mois</h2></div><div class="ops">';
     douze.forEach(g => {
       h += '<div class="grp"><span class="g-mid"><span class="g-n">' + esc(cap(libelleMois(g.cle))) + '</span>' +
-        '<span class="g-b"><i style="width:' + large(g.total, maxM) + '%"></i></span></span>' +
+        '<span class="g-b">' + barre(g.total, maxM) + '</span></span>' +
         '<span class="g-r">' + mtGroupe(g.total) +
         '<span class="g-c">' + g.nb + '×</span></span></div>';
     });
@@ -1601,6 +1647,21 @@ function vueModal(m){
       '<button class="btn ' + (ecr ? "dang" : "pri") + '" style="flex:1" data-act="rouvrir-ok" data-id="' + m.id + '">' +
       (ecr ? "Écraser et annuler" : "Annuler la clôture") + '</button></div>';
   }
+  else if(m.type === "export"){
+    c = '<h3>Exporter une sauvegarde</h3>' +
+      '<div class="sous">Un fichier JSON. Ce qu\'il contient est ce que tu pourras restaurer : ' +
+      'une sauvegarde perso ne ramènera jamais la famille, et l\'inverse.</div>' +
+      PORTEES_SAUV.map(([k,titre,desc]) => {
+        const c2 = comptePortee(k);
+        return '<button class="lig" style="width:100%;text-align:left" data-act="exporter-ok" data-id="' + k + '">' +
+          '<span class="l">' + titre +
+          '<span class="d">' + esc(desc) + ' — ' + c2.d + (c2.d > 1 ? " entrées" : " entrée") +
+          ', ' + c2.p + (c2.p > 1 ? " mois" : " mois") + '</span></span>' +
+          '<span class="pgo">' + svg("chev",16) + '</span></button>';
+      }).join("") +
+      '<div class="btns" style="margin:20px 0 0">' +
+      '<button class="btn wide" data-act="fermer-modal">Renoncer</button></div>';
+  }
   else if(m.type === "renommer"){
     c = '<h3>Renommer le mois</h3>' +
       '<div class="champ"><label for="m-titre">Nom</label>' +
@@ -1671,9 +1732,9 @@ function vueReglages(){
 
   const q = state.quota;
   h += '<div class="bloc"><div class="bloc-h">Données</div><div class="bloc-b">' +
-    '<div class="lig"><div class="l">Sauvegarde<div class="d">Un fichier JSON, à ranger où tu veux.</div></div>' +
+    '<div class="lig"><div class="l">Sauvegarde<div class="d">Les deux ardoises, ou une seule.</div></div>' +
       '<button class="btn" data-act="exporter">Exporter</button></div>' +
-    '<div class="lig"><div class="l">Restaurer<div class="d">Ajoute ce qui manque, n\'écrase rien.</div></div>' +
+    '<div class="lig"><div class="l">Restaurer<div class="d">Chaque entrée retrouve son ardoise. Ajoute ce qui manque, n\'écrase rien.</div></div>' +
       '<button class="btn" data-act="importer">Importer</button></div>' +
     '<div class="lig"><div class="l">Contenu<div class="d">' +
       toutesDepenses().length + (toutesDepenses().length > 1 ? " entrées · " : " entrée · ") +
@@ -1753,6 +1814,15 @@ document.addEventListener("click", async ev => {
   if(act === "journal-ouvrir"){
     state.tab = "reglages"; state.journal = true; state.neuf = false;
     DB.meta.vue = VERSION; sauver(true); render(); window.scrollTo(0,0); return;
+  }
+
+  /* ---- masquage des montants ---- */
+  if(act === "basculer-masque"){
+    DB.settings.masque = !masque();
+    sauver(true);
+    render();
+    toast(masque() ? "Montants masqués" : "Montants réaffichés");
+    return;
   }
 
   /* ---- ardoise courante ---- */
@@ -1970,7 +2040,8 @@ document.addEventListener("click", async ev => {
   }
 
   /* ---- données ---- */
-  if(act === "exporter"){ exporterJSON(); return; }
+  if(act === "exporter"){ ouvrirModal({ type:"export" }); return; }
+  if(act === "exporter-ok"){ fermerModal(); exporterJSON(id); return; }
   if(act === "importer"){
     const inp = document.createElement("input");
     inp.type = "file"; inp.accept = "application/json,.json";
@@ -2018,9 +2089,31 @@ document.addEventListener("keydown", ev => {
 /* ============================================================
    IMPORT / EXPORT
    ============================================================ */
-function contenuSauvegarde(){
-  return JSON.stringify({ app:"ardoise", appVersion:VERSION, schema:SCHEMA,
-    depenses:DB.depenses, periodes:DB.periodes, settings:DB.settings, meta:DB.meta }, null, 2);
+/* Une sauvegarde peut ne retenir qu'une ardoise. Le fichier dit ce qu'il
+   contient, et n'emporte que le budget de la portée choisie : restaurer une
+   sauvegarde perso ne doit rien réveiller du côté famille. */
+const PORTEES_SAUV = [
+  ["tout","Les deux ardoises","perso et famille dans un seul fichier"],
+  ["perso","Perso seulement","les entrées, mois et budget perso"],
+  ["famille","Famille seulement","les entrées, mois et budget famille"]
+];
+function filtrerPortee(obj, portee){
+  const r = {};
+  Object.entries(obj).forEach(([k,v]) => { if(portee === "tout" || ardoiseDe(v) === portee) r[k] = v; });
+  return r;
+}
+function comptePortee(portee){
+  return { d:toutesDepenses().filter(x => portee === "tout" || ardoiseDe(x) === portee).length,
+           p:toutesPeriodes().filter(x => portee === "tout" || ardoiseDe(x) === portee).length };
+}
+function contenuSauvegarde(portee){
+  const p = portee || "tout";
+  const reglages = { ...DB.settings };
+  if(p === "perso") delete reglages.budgetFam;
+  if(p === "famille") delete reglages.budget;
+  return JSON.stringify({ app:"ardoise", appVersion:VERSION, schema:SCHEMA, portee:p,
+    depenses:filtrerPortee(DB.depenses, p), periodes:filtrerPortee(DB.periodes, p),
+    settings:reglages, meta:DB.meta }, null, 2);
 }
 function telecharger(nom, blob){
   const u = URL.createObjectURL(blob);
@@ -2029,19 +2122,24 @@ function telecharger(nom, blob){
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(u), 4000);
 }
-function exporterJSON(){
+function exporterJSON(portee){
+  const p = portee || "tout";
   const d = new Date();
-  const nom = "ardoise-" + d.getFullYear() + p2(d.getMonth()+1) + p2(d.getDate()) + ".json";
-  telecharger(nom, new Blob([contenuSauvegarde()], { type:"application/json" }));
+  const nom = "ardoise" + (p === "tout" ? "" : "-" + p) + "-" +
+    d.getFullYear() + p2(d.getMonth()+1) + p2(d.getDate()) + ".json";
+  telecharger(nom, new Blob([contenuSauvegarde(p)], { type:"application/json" }));
   DB.meta.exporte = Date.now(); sauver(true); render();
-  toast("Sauvegarde exportée");
+  const c = comptePortee(p);
+  toast(c.d + (c.d > 1 ? " entrées exportées" : " entrée exportée") +
+        (p === "tout" ? "" : " — " + p));
 }
 async function importerFichier(f){
   try{
     const x = JSON.parse(await f.text());
     const r = fusionnerSauvegarde(x);
     render();
-    toast(r.nd + (r.nd > 1 ? " dépenses" : " dépense") + " et " + r.np + " mois ajoutés");
+    const ou = r.perso && r.famille ? "" : r.famille ? " en famille" : r.perso ? " en perso" : "";
+    toast(r.nd + (r.nd > 1 ? " entrées" : " entrée") + " et " + r.np + " mois ajoutés" + ou);
   }catch(e){
     toast("Fichier illisible : " + ((e && e.message) || e));
   }

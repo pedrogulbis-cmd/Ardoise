@@ -68,6 +68,14 @@ header.top{position:sticky;top:0;z-index:30;background:var(--voile);
 .ver{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--gris);
   border:1px solid var(--trait);border-radius:7px;padding:3px 7px;background:var(--fond2)}
 .ver.neuf{color:var(--acc);border-color:var(--accB);background:var(--accF)}
+/* Le sélecteur d'ardoise : il dit toujours où l'on est, et bascule d'une
+   touche. Teinté à l'accent en famille, pour qu'on ne saisisse jamais une
+   dépense perso dans le pot commun sans s'en apercevoir. */
+.esp{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 11px;
+  border-radius:9px;border:1px solid var(--trait);background:var(--carte);
+  font-size:13px;font-weight:500;letter-spacing:-.01em;white-space:nowrap}
+.esp:active{background:var(--fond2)}
+.esp.fam{border-color:var(--accB);background:var(--accF);color:var(--acc)}
 .iconbtn{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;
   border:1px solid var(--trait);color:var(--texte);background:var(--carte)}
 .iconbtn:active{background:var(--fond2)}
@@ -309,6 +317,7 @@ html[data-theme="sombre"] .seg button.on{background:var(--texte);color:#0d0d10}
     </div>
     <button class="ver" id="ver-chip" data-act="journal-ouvrir" title="Voir les nouveautés"></button>
     <div class="top-sp"></div>
+    <span id="esp-slot"></span>
     <button class="iconbtn pri" data-act="nouvelle-depense" aria-label="Nouvelle dépense" title="Nouvelle dépense">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
     </button>
@@ -330,9 +339,20 @@ html[data-theme="sombre"] .seg button.on{background:var(--texte);color:#0d0d10}
    Un seul fichier, aucune dépendance, stockage local (IndexedDB).
    ============================================================ */
 
-const VERSION = "1.4.1";
-const SCHEMA  = 2;
+const VERSION = "1.5.0";
+const SCHEMA  = 3;
 const JOURNAL = [
+  { v:"1.5.0", d:"2026-09-04", t:"Deux ardoises", l:[
+    "Un bouton en haut de l'écran, à gauche du plus, fait passer de l'ardoise perso à l'ardoise famille et retour.",
+    "Les deux sont étanches : chacune a ses entrées, son budget, ses clôtures, son historique, ses récurrences et son analyse. Rien ne se mélange, rien ne se cumule.",
+    "L'ardoise famille ne reçoit que des dépenses — les charges du foyer, loyer, électricité, eau. Le choix dépense ou revenu n'y apparaît pas, et son écran annonce simplement ce que pèse le mois.",
+    "Le bouton se teinte à la couleur d'accent en famille, pour qu'on ne saisisse pas une dépense perso dans le pot commun sans s'en apercevoir.",
+    "Les entrées et les mois déjà enregistrés restent sur l'ardoise perso."
+  ]},
+  { v:"1.4.2", d:"2026-09-04", t:"Le solde en tête", l:[
+    "Accueil : le solde du mois prend la grande place, les dépenses en cours passent en dessous.",
+    "Accueil : les dépenses s'affichent après les revenus au lieu de s'intercaler entre le nombre d'entrées et eux."
+  ]},
   { v:"1.4.1", d:"2026-09-04", t:"Lisibilité", l:[
     "Récurrences : la ligne annonce la prochaine échéance, plus celle du mois en cours. Toutes commencent donc par la même information, abonnements comme séries bornées.",
     "Le décompte des échéances restantes passe sur une seconde ligne, détachée de la date.",
@@ -516,7 +536,9 @@ const ICONES = {
   horloge:'<circle cx="12" cy="12" r="8.2"/><path d="M12 7.5V12l3 1.8"/>',
   cal:'<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/>',
   loupe:'<circle cx="10.8" cy="10.8" r="6.3"/><path d="M15.4 15.4 20 20"/>',
-  boucle:'<path d="M17 3.5 20.5 7 17 10.5"/><path d="M3.5 13v-2a4 4 0 0 1 4-4h13"/><path d="M7 20.5 3.5 17 7 13.5"/><path d="M20.5 11v2a4 4 0 0 1-4 4h-13"/>'
+  boucle:'<path d="M17 3.5 20.5 7 17 10.5"/><path d="M3.5 13v-2a4 4 0 0 1 4-4h13"/><path d="M7 20.5 3.5 17 7 13.5"/><path d="M20.5 11v2a4 4 0 0 1-4 4h-13"/>',
+  perso:'<circle cx="12" cy="8" r="3.6"/><path d="M5.2 20c0-3.5 3-5.4 6.8-5.4S18.8 16.5 18.8 20"/>',
+  famille:'<circle cx="8.6" cy="8.4" r="3"/><circle cx="16.8" cy="9.6" r="2.3"/><path d="M2.6 19.6c0-3.1 2.7-4.8 6-4.8s6 1.7 6 4.8"/><path d="M16.4 14.4c2.8 0 4.9 1.5 4.9 4.3"/>'
 };
 /* Le sigle : les bâtons de l'ardoise du café, barrés par le cinquième trait.
    Il se peint avec les variables du thème, donc il suit l'accent sans être
@@ -542,8 +564,9 @@ function svg(n, t, sw){
    ============================================================ */
 const DEFAULTS = {
   version:SCHEMA, depenses:{}, periodes:{},
-  settings:{ theme:"clair", accent:ACCENTS[0][0], budget:0, reporterFuturs:true,
-             accTri:"recent", aPortee:"tout", aPeriode:"tout", aTri:"recent", aSens:"tout" },
+  settings:{ theme:"clair", accent:ACCENTS[0][0], budget:0, budgetFam:0, espace:"perso",
+             reporterFuturs:true, accTri:"recent", aPortee:"tout", aPeriode:"tout",
+             aTri:"recent", aSens:"tout" },
   meta:{ cree:Date.now(), modifie:0, exporte:0, vue:null }
 };
 let DB = JSON.parse(JSON.stringify(DEFAULTS));
@@ -656,7 +679,10 @@ function fusionnerSauvegarde(x){
   // Une dépense rattachée à un mois absent retomberait dans le vide : on la
   // remet en cours plutôt que de la perdre.
   Object.values(DB.depenses).forEach(d => { if(d.periode && !DB.periodes[d.periode]) d.periode = ""; });
-  if(x.settings && !DB.settings.budget && x.settings.budget) DB.settings.budget = x.settings.budget;
+  if(x.settings){
+    if(!DB.settings.budget && x.settings.budget) DB.settings.budget = x.settings.budget;
+    if(!DB.settings.budgetFam && x.settings.budgetFam) DB.settings.budgetFam = x.settings.budgetFam;
+  }
   toutSalir();
   return { nd, np };
 }
@@ -664,12 +690,27 @@ function fusionnerSauvegarde(x){
 /* ============================================================
    MODÈLE
    Une entrée porte un montant en centimes, un sens — dépense ou revenu —, un
-   libellé, une note facultative, une date, une récurrence éventuelle, et le
-   mois qui l'a absorbée (vide tant qu'elle est en cours). Aucun total n'est
-   stocké : tout se recalcule, donc rien ne peut diverger.
+   libellé, une note facultative, une date, une récurrence éventuelle, l'ardoise
+   à laquelle elle appartient, et le mois qui l'a absorbée (vide tant qu'elle
+   est en cours). Aucun total n'est stocké : tout se recalcule, donc rien ne
+   peut diverger.
+
+   Deux ardoises cohabitent sans jamais se mêler : « perso », avec ses revenus
+   et son budget, et « famille », qui ne reçoit que des dépenses. Elles ne
+   partagent ni totaux, ni budget, ni clôtures, ni historique, ni récurrences.
+   Le bouton en haut de l'écran ne fait que choisir laquelle est affichée.
    ============================================================ */
-const depensesAll = () => Object.values(DB.depenses);
-const periodesAll = () => Object.values(DB.periodes);
+const espace = () => DB.settings.espace === "famille" ? "famille" : "perso";
+const estFamille = () => espace() === "famille";
+/* Une entrée d'avant les deux ardoises n'a pas de champ : elle est perso,
+   comme elle l'a toujours été. */
+const ardoiseDe = x => x && x.ardoise === "famille" ? "famille" : "perso";
+const deLArdoise = x => ardoiseDe(x) === espace();
+
+const toutesDepenses = () => Object.values(DB.depenses);
+const toutesPeriodes = () => Object.values(DB.periodes);
+const depensesAll = () => toutesDepenses().filter(deLArdoise);
+const periodesAll = () => toutesPeriodes().filter(deLArdoise);
 const enCours  = () => depensesAll().filter(d => !d.periode);
 const dePeriode = pid => depensesAll().filter(d => d.periode === pid);
 /* Une entrée d'avant les revenus n'a pas de champ « sens » : elle est une
@@ -679,7 +720,11 @@ const somme    = l => l.reduce((s,d) => s + (d.montant||0), 0);
 const sommeDep = l => somme(l.filter(d => !estRevenu(d)));
 const sommeRev = l => somme(l.filter(estRevenu));
 const futures = l => l.filter(d => d.date > todayISO());
-const budget = () => DB.settings.budget || 0;
+/* Chaque ardoise a son plafond : celui de la famille ne mord pas sur le tien. */
+const budget = () => (estFamille() ? DB.settings.budgetFam : DB.settings.budget) || 0;
+function fixerBudget(v){
+  if(estFamille()) DB.settings.budgetFam = v; else DB.settings.budget = v;
+}
 
 /* Tri d'affichage : la date décroissante, et à date égale la saisie la plus
    récente en premier. */
@@ -797,7 +842,7 @@ function creerDepense(o){
   const d = { id:uid(), montant:o.montant, libelle:(o.libelle||"").trim(),
               note:(o.note||"").trim(), sens:o.sens === "revenu" ? "revenu" : "depense",
               date:o.date || todayISO(), rec:o.rec || null, issuDe:o.issuDe || "",
-              periode:"", cree:Date.now() };
+              ardoise:o.ardoise || espace(), periode:"", cree:Date.now() };
   DB.depenses[d.id] = d; sauverDepense(d);
   return d;
 }
@@ -829,7 +874,7 @@ function propagerRecurrences(list, pid){
     if(r.mode === "fois" && (r.index || 1) >= (r.total || 1)) return;
     creerDepense({
       montant:d.montant, libelle:d.libelle, note:d.note, sens:d.sens,
-      date:plusMois(d.date, 1), issuDe:pid,
+      date:plusMois(d.date, 1), issuDe:pid, ardoise:ardoiseDe(d),
       rec: r.mode === "fois" ? { mode:"fois", total:r.total, index:(r.index||1) + 1 }
                              : { mode:"mensuel" }
     });
@@ -847,7 +892,8 @@ function cloturer(titre, reporter){
   if(!dedans.length) return null;
   const dates = dedans.map(d => d.date).sort();
   const p = { id:uid(), titre:(titre||"").trim() || cap(libelleMois(moisDominant(dedans))),
-              cloture:Date.now(), budget:budget(), debut:dates[0], fin:dates[dates.length-1] };
+              cloture:Date.now(), budget:budget(), ardoise:espace(),
+              debut:dates[0], fin:dates[dates.length-1] };
   DB.periodes[p.id] = p; sauverPeriode(p);
   dedans.forEach(d => { d.periode = p.id; sauverDepense(d); });
   const rec = propagerRecurrences(dedans, p.id);
@@ -959,6 +1005,15 @@ function dessiner(){
   const chip = $("#ver-chip");
   if(chip){ chip.textContent = "v" + VERSION; chip.classList.toggle("neuf", state.neuf); }
 
+  const slot = document.getElementById("esp-slot");
+  if(slot){
+    const f = estFamille();
+    slot.innerHTML = '<button class="esp' + (f ? " fam" : "") + '" data-act="basculer-espace" ' +
+      'title="Passer sur l\'ardoise ' + (f ? "perso" : "famille") + '" ' +
+      'aria-label="Ardoise ' + (f ? "famille" : "perso") + ', toucher pour changer">' +
+      svg(f ? "famille" : "perso", 17) + '<span>' + (f ? "Famille" : "Perso") + '</span></button>';
+  }
+
   // Le champ de recherche est redessiné à chaque frappe : sans cela, le
   // curseur reviendrait au début et le clavier se refermerait.
   const ae = document.activeElement;
@@ -1038,24 +1093,24 @@ function vueAccueil(){
   const tot = sommeDep(list);
   const rev = sommeRev(list);
   const b = budget();
-  const e = etatBudget(tot, b);
   const fut = futures(list);
   const totFut = sommeDep(fut);
   const mode = DB.settings.accTri || "recent";
+  const solde = tot - rev;
+  const fam = estFamille();
 
+  // En famille, il n'y a que des dépenses : le solde vaudrait le total, et
+  // « solde » ne dirait rien de plus que « dépenses ».
   let h = '<section class="total">' +
-    '<div class="total-lbl">Dépenses en cours</div>' +
-    '<span class="total-val num ' + (e ? CL[e] : "") + '">' + esc(fmt(tot)) + '</span>' +
+    '<div class="total-lbl">' + (fam ? "Dépenses de la famille" : "Solde du mois") + '</div>' +
+    '<span class="total-val num ' + (!fam && solde <= 0 ? "c-ok" : "") + '">' +
+      esc(fam ? fmt(tot) : solde < 0 ? "+" + fmt(-solde) : fmt(solde)) + '</span>' +
     blocBudget(tot, b, false);
 
   const sub = [];
   sub.push('<span><b>' + list.length + '</b> ' + (list.length > 1 ? "entrées" : "entrée") + '</span>');
-  // Le solde du mois : ce qui sort, moins ce qui rentre. Négatif, il devient
-  // un excédent, et se lit en vert.
-  const solde = tot - rev;
-  sub.push('<span>solde ' + (solde <= 0 ? '<b class="c-ok">' : "<b>") +
-    (solde < 0 ? "+" + fmt(-solde) : fmt(solde)) + '</b></span>');
   if(rev) sub.push('<span class="c-ok">+<b class="c-ok">' + esc(fmt(rev)) + '</b> de revenus</span>');
+  if(!fam) sub.push('<span><b>' + esc(fmt(tot)) + '</b> de dépenses</span>');
   if(totFut) sub.push('<span>dont <b>' + esc(fmt(totFut)) + '</b> à venir</span>');
   h += '<div class="total-sub">' + sub.join("") + '</div></section>';
 
@@ -1064,12 +1119,15 @@ function vueAccueil(){
     '<button class="btn" data-act="cloturer"' + (list.length ? "" : " disabled") + '>' +
       svg("verrou",16) + 'Clôturer le mois</button></div>';
 
-  h += '<div class="sect"><h2>Le mois en cours</h2><div class="sp"></div>' +
+  h += '<div class="sect"><h2>' + (fam ? "Le mois de la famille" : "Le mois en cours") + '</h2><div class="sp"></div>' +
     (list.length ? '<span class="cnt">' + esc(fmt(tot)) + '</span>' : "") + '</div>';
 
   if(!list.length){
-    return h + '<div class="ops"><div class="vide"><b>Rien sur l\'ardoise</b>' +
-      'Ajoute une dépense, elle s\'inscrit à la date du jour — ou à celle que tu choisis.</div></div>';
+    return h + '<div class="ops"><div class="vide"><b>' +
+      (fam ? "Rien sur l'ardoise famille" : "Rien sur l'ardoise") + '</b>' +
+      (fam ? "Ajoute les charges du foyer — loyer, électricité, eau. Elles restent ici et ne touchent jamais ton perso."
+           : "Ajoute une dépense, elle s'inscrit à la date du jour — ou à celle que tu choisis.") +
+      '</div></div>';
   }
 
   h += '<div class="chips" style="margin-bottom:2px">' +
@@ -1128,13 +1186,16 @@ function ligneResultat(d){
 function vueAnalyse(){
   const s = DB.settings;
   const q = state.q;
-  const res = chercher(q, s.aPortee, s.aPeriode, s.aSens);
-  const sens = s.aSens;
+  const fam = estFamille();
+  // L'ardoise famille n'ayant que des dépenses, son filtre de sens n'aurait
+  // qu'une position utile : il disparaît.
+  const sens = fam ? "dep" : s.aSens;
+  const res = chercher(q, s.aPortee, s.aPeriode, sens);
   const lesDep = res.filter(d => !estRevenu(d));
   const lesRev = res.filter(estRevenu);
   const totDep = somme(lesDep), totRev = somme(lesRev);
   const solde = totDep - totRev;
-  const filtre = !!q || s.aPortee !== "tout" || s.aPeriode !== "tout" || sens !== "tout";
+  const filtre = !!q || s.aPortee !== "tout" || s.aPeriode !== "tout" || (!fam && sens !== "tout");
   // « Tout » compte les deux sens et affiche leur solde. « Dépenses » ignore les
   // revenus, « Revenus » ignore les dépenses.
   const net = sens === "tout";
@@ -1150,7 +1211,7 @@ function vueAnalyse(){
     '</div>';
 
   h += '<div class="filtres">' +
-    rangeeChips("Sens", SENS, sens, "a-sens") +
+    (fam ? "" : rangeeChips("Sens", SENS, sens, "a-sens")) +
     rangeeChips("Portée", PORTEES, s.aPortee, "a-portee") +
     rangeeChips("Période", PERIODES, s.aPeriode, "a-periode") +
     rangeeChips("Tri", TRIS, s.aTri, "a-tri") + '</div>';
@@ -1425,20 +1486,26 @@ const RECS = [["aucune","Aucune"],["mensuel","Tous les mois"],["fois","Plusieurs
 function vueModal(m){
   let c = "";
   if(m.type === "depense"){
-    const rev = m.sens === "revenu";
+    const fam = estFamille();
+    const rev = !fam && m.sens === "revenu";
     const rec = m.rec || "aucune";
     c = '<h3>' + (m.id ? (rev ? "Modifier le revenu" : "Modifier la dépense")
                        : (rev ? "Nouveau revenu" : "Nouvelle dépense")) + '</h3>' +
-      '<div class="sous">' + (m.id ? "Tout reste modifiable, y compris le sens."
-                                   : "La date du jour est déjà remplie.") + '</div>' +
-      '<div class="champ"><div class="seg" style="width:100%">' +
+      '<div class="sous">' + (fam ? "Ardoise famille — une charge du foyer, sans effet sur ton perso."
+                                  : m.id ? "Tout reste modifiable, y compris le sens."
+                                         : "La date du jour est déjà remplie.") + '</div>' +
+      // L'ardoise famille ne reçoit que des dépenses : le choix du sens n'y a
+      // pas lieu d'être.
+      (fam ? "" :
+        '<div class="champ"><div class="seg" style="width:100%">' +
         '<button style="flex:1" class="' + (!rev ? "on" : "") + '" data-act="sens" data-id="depense">Dépense</button>' +
         '<button style="flex:1" class="' + (rev ? "on" : "") + '" data-act="sens" data-id="revenu">Revenu</button>' +
-      '</div></div>' +
+        '</div></div>') +
       champMontant(m.montant) +
       '<div class="champ"><label for="m-lib">C\'est quoi ?</label>' +
       '<input type="text" id="m-lib" autocomplete="off" placeholder="' +
-        (rev ? "Salaire, remboursement…" : "Courses, essence, resto…") + '" value="' + esc(m.libelle||"") + '"></div>' +
+        (fam ? "Loyer, électricité, eau…" : rev ? "Salaire, remboursement…" : "Courses, essence, resto…") +
+        '" value="' + esc(m.libelle||"") + '"></div>' +
       '<div class="champ"><label for="m-note">Note <span style="color:var(--gris2)">facultative</span></label>' +
       '<textarea id="m-note" rows="2" autocomplete="off" placeholder="Le détail qu\'on oublie en trois mois">' + esc(m.note||"") + '</textarea>' +
       '<div class="aide">La recherche fouille les notes autant que les libellés.</div></div>' +
@@ -1578,8 +1645,10 @@ function vueReglages(){
     '<div class="total-sub"><span class="mono">v' + VERSION + '</span><span>schéma ' + SCHEMA + '</span></div></section>';
 
   h += '<div class="bloc"><div class="bloc-h">Budget</div><div class="bloc-b">' +
-    '<div class="lig"><div class="l">Budget du mois<div class="d">' +
-      (budget() ? "Jauge et couleurs actives." : "Aucun budget : total en noir, sans jauge.") +
+    '<div class="lig"><div class="l">Budget du mois — ardoise ' + (estFamille() ? "famille" : "perso") +
+    '<div class="d">' +
+      (budget() ? "Jauge et couleurs actives. L'autre ardoise garde le sien."
+                : "Aucun budget : total en noir, sans jauge. Chaque ardoise a le sien.") +
     '</div></div><button class="btn" data-act="modifier-budget">' +
       (budget() ? esc(fmt(budget())) : "Définir") + '</button></div>' +
     (budget() ? '<div class="lig"><div class="l">Retirer le budget<div class="d">Le total redevient neutre.</div></div>' +
@@ -1607,8 +1676,8 @@ function vueReglages(){
     '<div class="lig"><div class="l">Restaurer<div class="d">Ajoute ce qui manque, n\'écrase rien.</div></div>' +
       '<button class="btn" data-act="importer">Importer</button></div>' +
     '<div class="lig"><div class="l">Contenu<div class="d">' +
-      depensesAll().length + (depensesAll().length > 1 ? " dépenses · " : " dépense · ") +
-      periodesAll().length + " mois" +
+      toutesDepenses().length + (toutesDepenses().length > 1 ? " entrées · " : " entrée · ") +
+      toutesPeriodes().length + " mois · les deux ardoises" +
       '</div></div><span class="mono" style="font-size:12px;color:var(--gris)">' +
       (DB.meta.exporte ? "export " + esc(quand(DB.meta.exporte)) : "jamais exporté") + '</span></div>' +
     (q && q.usage != null ? '<div class="lig" style="display:block"><div class="l">Espace utilisé<div class="d">' +
@@ -1659,7 +1728,7 @@ function lireDepenseModal(){
   const libelle = (($("#m-lib") || {}).value || "").trim();
   const note = (($("#m-note") || {}).value || "").trim();
   const date = (($("#m-date") || {}).value || "").trim() || todayISO();
-  const sens = m.sens === "revenu" ? "revenu" : "depense";
+  const sens = (!estFamille() && m.sens === "revenu") ? "revenu" : "depense";
   let rec = null;
   if(m.rec === "mensuel") rec = { mode:"mensuel" };
   else if(m.rec === "fois"){
@@ -1684,6 +1753,18 @@ document.addEventListener("click", async ev => {
   if(act === "journal-ouvrir"){
     state.tab = "reglages"; state.journal = true; state.neuf = false;
     DB.meta.vue = VERSION; sauver(true); render(); window.scrollTo(0,0); return;
+  }
+
+  /* ---- ardoise courante ---- */
+  if(act === "basculer-espace"){
+    DB.settings.espace = estFamille() ? "perso" : "famille";
+    // Rien de l'ardoise quittée ne doit rester à l'écran : ni fiche de mois
+    // ouverte, ni recherche en cours.
+    state.periode = null; state.modal = null; state.q = "";
+    state.limite = 30; state.groupes = false;
+    sauver(true);
+    render(); window.scrollTo(0,0);
+    return;
   }
 
   /* ---- tri de l'accueil ---- */
@@ -1781,13 +1862,13 @@ document.addEventListener("click", async ev => {
   }
   if(act === "budget-enregistrer"){
     const v = cents(($("#m-montant") || {}).value);
-    DB.settings.budget = v > 0 ? v : 0;
+    fixerBudget(v > 0 ? v : 0);
     sauver(); fermerModal();
     toast(v > 0 ? "Budget fixé à " + fmt(v) : "Budget retiré");
     return;
   }
   if(act === "retirer-budget"){
-    DB.settings.budget = 0; sauver(); render(); toast("Budget retiré"); return;
+    fixerBudget(0); sauver(); render(); toast("Budget retiré"); return;
   }
 
   /* ---- clôture ---- */

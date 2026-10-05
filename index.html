@@ -228,13 +228,22 @@ html[data-theme="sombre"] .chip.on{color:#0d0d10;background:var(--texte);border-
 .sheet-top .t{font-weight:600;letter-spacing:-.02em;overflow:hidden;text-overflow:ellipsis;
   white-space:nowrap;text-transform:capitalize}
 .sheet-top .sp{flex:1}
-.mdl-bg{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.34);
+/* --vv-haut et --vv-bas suivent la partie de l'écran que le clavier laisse
+   libre : la modale s'y loge tout entière, boutons compris. */
+.mdl-bg{position:fixed;inset:var(--vv-haut,0px) 0 var(--vv-bas,0px) 0;z-index:60;background:rgba(0,0,0,.34);
   display:flex;align-items:flex-end;justify-content:center;padding:0}
 @media(min-width:560px){.mdl-bg{align-items:center;padding:20px}}
 .mdl{background:var(--fond);width:100%;max-width:460px;border-radius:16px 16px 0 0;
-  box-shadow:var(--ombre);max-height:92vh;overflow:auto;overscroll-behavior:contain;
-  padding:18px 18px calc(18px + env(safe-area-inset-bottom));animation:mte .2s cubic-bezier(.22,.7,.3,1)}
+  box-shadow:var(--ombre);max-height:min(92vh,100%);overflow:auto;overscroll-behavior:contain;
+  scroll-padding-bottom:calc(80px + env(safe-area-inset-bottom));
+  padding:18px 18px 0;animation:mte .2s cubic-bezier(.22,.7,.3,1)}
 @media(min-width:560px){.mdl{border-radius:16px}}
+/* Renoncer et valider restent collés au bas de la modale : le contenu défile
+   derrière eux, ils ne quittent jamais l'écran. Toute modale se termine par
+   ce pied, qui porte donc la marge basse à la place de .mdl. */
+.mdl .pied{position:sticky;bottom:0;z-index:2;flex-wrap:nowrap;margin:8px -18px 0;
+  padding:12px 18px calc(18px + env(safe-area-inset-bottom));
+  background:var(--fond);border-top:1px solid var(--trait2)}
 .mdl h3{font-size:17px;margin-bottom:2px}
 .mdl .sous{font-size:13px;color:var(--gris);margin-bottom:14px}
 .champ{margin:12px 0}
@@ -347,9 +356,14 @@ html[data-theme="sombre"] .seg button.on{background:var(--texte);color:#0d0d10}
    Un seul fichier, aucune dépendance, stockage local (IndexedDB).
    ============================================================ */
 
-const VERSION = "1.6.0";
+const VERSION = "1.6.1";
 const SCHEMA  = 3;
 const JOURNAL = [
+  { v:"1.6.1", d:"2026-10-05", t:"Boutons toujours sous la main", l:[
+    "Renoncer et valider restent affichés au bas de l'écran pendant toute la saisie : le formulaire défile derrière eux, plus besoin de descendre jusqu'au bout pour enregistrer.",
+    "Quand le clavier s'ouvre, la fenêtre se resserre au-dessus de lui au lieu de glisser dessous, et les deux boutons le suivent.",
+    "Vaut pour toutes les fenêtres : dépense, budget, clôture, renommage, suppression."
+  ]},
   { v:"1.6.0", d:"2026-09-04", t:"Masquer les montants", l:[
     "Un œil en haut de l'écran, à gauche de l'ardoise, remplace tous les montants par des points. Les libellés, les notes, les dates et les lignes restent lisibles : on peut montrer l'application sans montrer ses chiffres.",
     "Les jauges de budget et les barres de répartition se vident aussi, et les couleurs du budget s'éteignent : une longueur ou une pastille rouge en disent autant qu'un nombre.",
@@ -1522,7 +1536,7 @@ function champMontant(val){
       'placeholder="0,00" value="' + esc(val || "") + '"><span class="mt-eur">€</span></div></div>';
 }
 function boiteBoutons(valider, act){
-  return '<div class="btns" style="margin:20px 0 0">' +
+  return '<div class="btns pied">' +
     '<button class="btn" style="flex:0 0 auto" data-act="fermer-modal">Renoncer</button>' +
     '<button class="btn pri" style="flex:1" data-act="' + act + '">' + valider + '</button></div>';
 }
@@ -1615,7 +1629,7 @@ function vueModal(m){
       (sommeRev(dedans) ? " et " + esc(fmt(sommeRev(dedans))) + " de revenus" : "") + '.' +
       (recs.length ? '<br>' + recs.length + (recs.length > 1 ? " récurrences seront reconduites" : " récurrence sera reconduite") +
         ' sur le mois suivant.' : "") + '</div>' +
-      '<div class="btns" style="margin:20px 0 0">' +
+      '<div class="btns pied">' +
       '<button class="btn" style="flex:0 0 auto" data-act="fermer-modal">Renoncer</button>' +
       '<button class="btn pri" style="flex:1" data-act="cloture-ok"' + (dedans.length ? "" : " disabled") + '>' +
       (force ? "Clôturer quand même" : "Clôturer") + '</button></div>';
@@ -1642,7 +1656,7 @@ function vueModal(m){
               ' par cette clôture seront retirées, pour éviter les doublons.' : "") + '</div>')
         : (eng ? '<div class="aide">Les ' + eng + ' échéance' + (eng > 1 ? "s engendrées" : " engendrée") +
             ' par cette clôture seront retirées, pour éviter les doublons.</div>' : "")) +
-      '<div class="btns" style="margin:20px 0 0">' +
+      '<div class="btns pied">' +
       '<button class="btn" style="flex:0 0 auto" data-act="fermer-modal">Renoncer</button>' +
       '<button class="btn ' + (ecr ? "dang" : "pri") + '" style="flex:1" data-act="rouvrir-ok" data-id="' + m.id + '">' +
       (ecr ? "Écraser et annuler" : "Annuler la clôture") + '</button></div>';
@@ -1659,7 +1673,7 @@ function vueModal(m){
           ', ' + c2.p + (c2.p > 1 ? " mois" : " mois") + '</span></span>' +
           '<span class="pgo">' + svg("chev",16) + '</span></button>';
       }).join("") +
-      '<div class="btns" style="margin:20px 0 0">' +
+      '<div class="btns pied">' +
       '<button class="btn wide" data-act="fermer-modal">Renoncer</button></div>';
   }
   else if(m.type === "renommer"){
@@ -1671,7 +1685,7 @@ function vueModal(m){
   else if(m.type === "supprimer-periode"){
     c = '<h3>Supprimer « ' + esc(m.titre) + ' » ?</h3>' +
       '<div class="sous">Le mois et ses dépenses disparaissent de l\'historique. Tu pourras annuler juste après.</div>' +
-      '<div class="btns" style="margin:20px 0 0">' +
+      '<div class="btns pied">' +
       '<button class="btn" style="flex:0 0 auto" data-act="fermer-modal">Renoncer</button>' +
       '<button class="btn dang" style="flex:1" data-act="supprimer-periode-ok" data-id="' + m.id + '">Supprimer</button></div>';
   }
@@ -1680,7 +1694,7 @@ function vueModal(m){
       '<div class="sous">Efface définitivement les dépenses et l\'historique de cet appareil.</div>' +
       '<div class="champ"><label for="m-conf">Tape EFFACER pour confirmer</label>' +
       '<input type="text" id="m-conf" autocomplete="off" placeholder="EFFACER"></div>' +
-      '<div class="btns" style="margin:20px 0 0">' +
+      '<div class="btns pied">' +
       '<button class="btn" style="flex:0 0 auto" data-act="fermer-modal">Renoncer</button>' +
       '<button class="btn dang" style="flex:1" data-act="effacer-ok">Supprimer définitivement</button></div>';
   }
@@ -2257,6 +2271,20 @@ document.addEventListener("visibilitychange", () => {
   if(_jour !== todayISO()){ _jour = todayISO(); render(); }
 });
 window.addEventListener("pagehide", () => { ecouler(); });
+
+/* Le clavier virtuel recouvre le bas de la page sans la redimensionner. On
+   mesure ce qu'il laisse de visible pour que la modale, et ses boutons, s'y
+   tiennent. Un zoom au pincement réduit aussi la zone visible : on l'ignore. */
+function majClavier(){
+  const vv = window.visualViewport, r = document.documentElement.style;
+  if(!vv || vv.scale > 1.01){ r.removeProperty("--vv-haut"); r.removeProperty("--vv-bas"); return; }
+  r.setProperty("--vv-haut", Math.max(0, Math.round(vv.offsetTop)) + "px");
+  r.setProperty("--vv-bas", Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)) + "px");
+}
+if(window.visualViewport){
+  visualViewport.addEventListener("resize", majClavier);
+  visualViewport.addEventListener("scroll", majClavier);
+}
 
 demarrer();
 </script>

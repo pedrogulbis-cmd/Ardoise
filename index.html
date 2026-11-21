@@ -292,6 +292,7 @@ textarea{resize:vertical;min-height:44px;line-height:1.45;font-family:inherit}
 .seg button{padding:7px 11px;font-size:13px;color:var(--gris);border-right:1px solid var(--trait)}
 .seg button:last-child{border-right:0}
 .seg button.on{background:var(--acc);color:var(--surAcc)}
+.seg.serre button{padding:7px 4px;white-space:nowrap}
 html[data-theme="sombre"] .seg button.on{background:var(--texte);color:#0d0d10}
 .pastilles{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
 .past{width:28px;height:28px;border-radius:50%;border:2px solid transparent;position:relative}
@@ -356,9 +357,16 @@ html[data-theme="sombre"] .seg button.on{background:var(--texte);color:#0d0d10}
    Un seul fichier, aucune dépendance, stockage local (IndexedDB).
    ============================================================ */
 
-const VERSION = "1.6.1";
+const VERSION = "1.7.0";
 const SCHEMA  = 3;
 const JOURNAL = [
+  { v:"1.7.0", d:"2026-11-21", t:"Corrections après clôture, récurrence annuelle", l:[
+    "Dans l'historique, chaque entrée d'un mois clôturé se touche pour être modifiée : montant, libellé, note, date, sens. Elle reste dans son mois, dont le total et les dates se recalculent. On peut aussi la dupliquer ou la supprimer, avec le bandeau pour se raviser.",
+    "Nouvelle récurrence « Annuelle », à côté de « Mensuelle » et « En N fois » : l'assurance, la taxe foncière, l'abonnement à l'année.",
+    "Une annuelle clôturée n'encombre pas l'accueil pendant onze mois : elle attend dans l'onglet Récurrences, avec la date de son retour, et réapparaît sur l'accueil au début de son mois d'échéance.",
+    "Les annuelles sont comptées à part, par an : l'engagement mensuel ne les mélange pas aux abonnements.",
+    "Une annuelle en attente s'arrête depuis sa fiche dans l'historique, en coupant « Revenir l'an prochain »."
+  ]},
   { v:"1.6.1", d:"2026-10-05", t:"Boutons toujours sous la main", l:[
     "Renoncer et valider restent affichés au bas de l'écran pendant toute la saisie : le formulaire défile derrière eux, plus besoin de descendre jusqu'au bout pour enregistrer.",
     "Quand le clavier s'ouvre, la fenêtre se resserre au-dessus de lui au lieu de glisser dessous, et les deux boutons le suivent.",
@@ -899,7 +907,8 @@ function libelleDe(d){ return (d.libelle || "").trim() || (estRevenu(d) ? "Reven
    plusieurs fois, « tous les mois » pour un abonnement sans fin. */
 function libelleRec(r){
   if(!r) return "";
-  return r.mode === "fois" ? (r.index || 1) + "/" + (r.total || 1) : "tous les mois";
+  return r.mode === "fois" ? (r.index || 1) + "/" + (r.total || 1)
+       : r.mode === "annuel" ? "tous les ans" : "tous les mois";
 }
 
 /* Le mois que la clôture propose : celui où tombe le plus de dépenses, et non
@@ -919,6 +928,9 @@ function propagerRecurrences(list, pid){
   list.forEach(d => {
     const r = d.rec;
     if(!r) return;
+    // L'annuelle ne se reconduit pas sur le mois suivant : elle dort onze mois
+    // dans l'historique, et reveillerAnnuelles() la ramène le moment venu.
+    if(r.mode === "annuel") return;
     if(r.mode === "fois" && (r.index || 1) >= (r.total || 1)) return;
     creerDepense({
       montant:d.montant, libelle:d.libelle, note:d.note, sens:d.sens,
@@ -926,6 +938,27 @@ function propagerRecurrences(list, pid){
       rec: r.mode === "fois" ? { mode:"fois", total:r.total, index:(r.index||1) + 1 }
                              : { mode:"mensuel" }
     });
+    n++;
+  });
+  return n;
+}
+/* Une annuelle clôturée attend son anniversaire sans rien encombrer : créer
+   son échéance dès la clôture la ferait traîner onze mois sur l'accueil,
+   comptée dans le total « à venir ». Elle reparaît donc au premier jour de son
+   mois d'échéance, et la marque « suite » empêche qu'elle renaisse deux fois.
+   Supprimer l'échéance réveillée arrête la série, comme pour un abonnement. */
+const recDormante = d => !!(d && d.periode && d.rec && d.rec.mode === "annuel" && !d.rec.suite);
+function reveillerAnnuelles(){
+  const mois = cleMois(todayISO());
+  let n = 0;
+  toutesDepenses().forEach(d => {
+    if(!recDormante(d)) return;
+    const suiv = plusMois(d.date, 12);
+    if(cleMois(suiv) > mois) return;
+    creerDepense({ montant:d.montant, libelle:d.libelle, note:d.note, sens:d.sens,
+                   date:suiv, ardoise:ardoiseDe(d), rec:{ mode:"annuel" } });
+    d.rec = { ...d.rec, suite:true };
+    sauverDepense(d);
     n++;
   });
   return n;
@@ -974,10 +1007,13 @@ function rouvrir(pid, ecraser){
    récurrence sur l'accueil, et la liste des récurrences actives se lit
    directement dessus. */
 function recActives(){
-  return enCours().filter(d => d.rec)
+  // Les annuelles endormies dans l'historique en font partie : elles
+  // reviendront, et c'est ici qu'on doit pouvoir le voir.
+  return depensesAll().filter(d => (!d.periode && d.rec) || recDormante(d))
     .sort((a,b) => (a.date === b.date ? libelleDe(a).localeCompare(libelleDe(b)) : (a.date < b.date ? -1 : 1)));
 }
-const recSansFin = d => d.rec && d.rec.mode === "mensuel";
+const recSansFin = d => d.rec && (d.rec.mode === "mensuel" || d.rec.mode === "annuel");
+const recAnnuelle = d => d.rec && d.rec.mode === "annuel";
 /* Le rang porté par l'entrée en cours est celui de l'échéance de ce mois-ci :
    elle est déjà inscrite dans les dépenses du mois, donc déjà réglée du point
    de vue du suivi. « 2/3 » veut dire deux réglées, une à venir — le badge et
@@ -985,7 +1021,7 @@ const recSansFin = d => d.rec && d.rec.mode === "mensuel";
 function recFaites(d){ return d.rec && d.rec.mode === "fois" ? Math.min(d.rec.index||1, d.rec.total||1) : 0; }
 function recRestantes(d){
   if(!d.rec) return 0;
-  if(d.rec.mode === "mensuel") return Infinity;
+  if(d.rec.mode !== "fois") return Infinity;
   return Math.max(0, (d.rec.total||1) - (d.rec.index||1));
 }
 function recReste(d){
@@ -999,7 +1035,9 @@ function recReste(d){
 function recProchaine(d){
   if(!d.rec) return "";
   if(d.rec.mode === "fois" && recRestantes(d) === 0) return "";
-  return d.date > todayISO() ? d.date : plusMois(d.date, 1);
+  const pas = d.rec.mode === "annuel" ? 12 : 1;
+  if(d.periode) return plusMois(d.date, pas);
+  return d.date > todayISO() ? d.date : plusMois(d.date, pas);
 }
 /* Un titre de mois déjà pris : la clôture doit prévenir avant de créer un
    doublon qu'on ne saura plus distinguer dans l'historique. */
@@ -1016,6 +1054,18 @@ function supprimerPeriode(pid){
 function restaurerPaquet(paq){
   (paq.periodes||[]).forEach(p => { DB.periodes[p.id] = p; sauverPeriode(p); });
   (paq.depenses||[]).forEach(d => { DB.depenses[d.id] = d; sauverDepense(d); });
+  (paq.depenses||[]).forEach(d => { if(d.periode) bornerPeriode(d.periode); });
+}
+/* Les bornes d'un mois clôturé suivent ses entrées : corriger une date ou
+   retirer une ligne après coup doit se lire dans « du … au … ». */
+function bornerPeriode(pid){
+  const p = DB.periodes[pid];
+  if(!p) return;
+  const dates = dePeriode(pid).map(d => d.date).sort();
+  if(!dates.length) return;
+  if(p.debut === dates[0] && p.fin === dates[dates.length-1]) return;
+  p.debut = dates[0]; p.fin = dates[dates.length-1];
+  sauverPeriode(p);
 }
 
 /* ============================================================
@@ -1367,8 +1417,11 @@ function vueAnalyse(){
    ============================================================ */
 function vueRecurrences(){
   const l = recActives();
-  const dep = l.filter(d => !estRevenu(d));
-  const rev = l.filter(estRevenu);
+  // Une annuelle ne pèse pas sur chaque mois : elle est comptée à part, par an,
+  // pour que l'engagement mensuel reste ce qu'il dit être.
+  const dep = l.filter(d => !estRevenu(d) && !recAnnuelle(d));
+  const rev = l.filter(d => estRevenu(d) && !recAnnuelle(d));
+  const ans = l.filter(d => !estRevenu(d) && recAnnuelle(d));
   const parMoisDep = somme(dep);
   const bornees = dep.filter(d => recRestantes(d) !== Infinity);
   const resteDu = bornees.reduce((s,d) => s + recReste(d), 0);
@@ -1381,47 +1434,51 @@ function vueRecurrences(){
     '<span><b>' + l.length + '</b> ' + (l.length > 1 ? "récurrences actives" : "récurrence active") + '</span>' +
     (sansFin ? '<span><b>' + sansFin + '</b> sans fin</span>' : "") +
     (resteDu ? '<span>reste à venir <b>' + esc(fmt(resteDu)) + '</b></span>' : "") +
+    (ans.length ? '<span>annuelles <b>' + esc(fmt(somme(ans))) + '</b> par an</span>' : "") +
     (rev.length ? '<span class="c-ok">+<b class="c-ok">' + esc(fmt(somme(rev))) + '</b> de revenus</span>' : "") +
     '</div></section>';
 
   if(!l.length){
     return h + '<div class="sect"><h2>Rien de récurrent</h2></div>' +
       '<div class="ops"><div class="vide"><b>Aucune récurrence active</b>' +
-      'Coche « Tous les mois » ou « Plusieurs fois » en ajoutant une entrée : elle reviendra d\'elle-même à chaque clôture.</div></div>';
+      'Choisis « Mensuelle », « Annuelle » ou « En N fois » en ajoutant une entrée : elle reviendra d\'elle-même.</div></div>';
   }
 
   h += '<div class="sect"><h2>Actives</h2></div><div class="ops">';
 
   l.forEach(d => {
-    const inf = recSansFin(d);
+    const an = recAnnuelle(d);
+    const inf = recSansFin(d) && !an;
     const rv = estRevenu(d);
     const restantes = recRestantes(d);
     const total = d.rec.total || 1;
     const suiv = recProchaine(d);
     // Première ligne identique pour toutes les récurrences : quand tombe la
-    // prochaine. Seules les séries bornées ajoutent leur décompte en dessous.
+    // prochaine. Seules les séries bornées ajoutent leur décompte en dessous,
+    // et les annuelles en attente disent quand elles reparaîtront.
     const l1 = suiv ? "Prochaine le " + frDate(suiv, true)
                     : "Dernière le " + frDate(d.date, true);
-    const l2 = inf ? ""
+    const l2 = an ? (d.periode ? "En attente, de retour sur l'accueil en " + libelleMois(cleMois(suiv)) : "")
+      : inf ? ""
       : restantes ? restantes + (restantes > 1 ? " échéances restantes" : " échéance restante") + " sur " + total
       : "Série terminée après celle-ci";
-    const reste = recReste(d);
+    const reste = an ? Infinity : recReste(d);
     h += '<button class="prow rec" data-act="modifier-depense" data-id="' + d.id + '">' +
       '<span class="pemo rec' + (inf ? " inf" : "") + '">' +
-        (inf ? "∞" : recFaites(d) + "/" + total) + '</span>' +
+        (an ? "1/an" : inf ? "∞" : recFaites(d) + "/" + total) + '</span>' +
       '<span class="pmid"><span class="pname">' + esc(libelleDe(d)) + '</span>' +
       '<span class="psub">' + esc(l1) + '</span>' +
       (l2 ? '<span class="psub2">' + esc(l2) + '</span>' : "") + '</span>' +
       '<span class="pmt"><span class="m' + (rv ? " rev" : "") + '">' + (rv ? "+" : "−") + fmt(d.montant) + '</span>' +
-      '<span class="r">' + (reste === Infinity ? "par mois" : reste ? "reste " + fmt(reste) : "soldée") + '</span></span>' +
+      '<span class="r">' + (an ? "par an" : reste === Infinity ? "par mois" : reste ? "reste " + fmt(reste) : "soldée") + '</span></span>' +
       '</button>';
   });
   h += '</div>';
 
   h += '<div class="aide" style="margin-top:14px">Le badge donne le rang atteint : « ∞ » pour un abonnement, ' +
-    '« 2/3 » pour la deuxième échéance sur trois, celle du mois en cours comprise. ' +
+    '« 1/an » pour une annuelle, « 2/3 » pour la deuxième échéance sur trois, celle du mois en cours comprise. ' +
     'Touche une ligne pour la modifier ; pour l\'arrêter, passe sa récurrence sur « Aucune ». ' +
-    'La prochaine naît au moment de la clôture.</div>';
+    'La prochaine naît au moment de la clôture — une annuelle, au début de son mois d\'échéance.</div>';
   return h;
 }
 
@@ -1510,11 +1567,14 @@ function vuePeriode(p){
     g.items.forEach(d => {
       const rv = estRevenu(d);
       const note = (d.note || "").trim();
-      h += '<div class="op"><span class="op-ic' + (rv ? " rev" : "") + '">' + svg(rv ? "plus" : "moins",15,2) + '</span>' +
+      // Une ligne d'un mois clôturé se touche comme sur l'accueil : l'erreur de
+      // saisie découverte après la clôture se corrige sans rouvrir le mois.
+      h += '<button class="op" data-act="modifier-depense" data-id="' + d.id + '">' +
+        '<span class="op-ic' + (rv ? " rev" : "") + '">' + svg(rv ? "plus" : "moins",15,2) + '</span>' +
         '<span class="op-mid"><span class="op-lib">' + esc(libelleDe(d)) +
           (d.rec ? '<span class="badge rec">' + esc(libelleRec(d.rec)) + '</span>' : "") + '</span>' +
         (note ? '<span class="op-note">' + esc(note) + '</span>' : "") + '</span>' +
-        '<span class="op-mt' + (rv ? " rev" : "") + '">' + (rv ? "+" : "−") + fmt(d.montant) + '</span></div>';
+        '<span class="op-mt' + (rv ? " rev" : "") + '">' + (rv ? "+" : "−") + fmt(d.montant) + '</span></button>';
     });
   });
   h += '</div>';
@@ -1522,7 +1582,8 @@ function vuePeriode(p){
   h += '<div class="btns" style="margin-top:20px">' +
     '<button class="btn" style="flex:1" data-act="rouvrir-periode" data-id="' + p.id + '">Annuler la clôture</button>' +
     '<button class="btn dang" style="flex:0 0 auto" data-act="supprimer-periode" data-id="' + p.id + '">Supprimer</button></div>' +
-    '<div class="aide">Annuler la clôture remet ces entrées sur l\'accueil et efface le mois de l\'historique.</div>';
+    '<div class="aide">Touche une entrée pour la corriger : elle reste dans ce mois. ' +
+    'Annuler la clôture remet ces entrées sur l\'accueil et efface le mois de l\'historique.</div>';
 
   return h + '</div></div>';
 }
@@ -1541,7 +1602,30 @@ function boiteBoutons(valider, act){
     '<button class="btn pri" style="flex:1" data-act="' + act + '">' + valider + '</button></div>';
 }
 
-const RECS = [["aucune","Aucune"],["mensuel","Tous les mois"],["fois","Plusieurs fois"]];
+const RECS = [["aucune","Aucune"],["mensuel","Mensuelle"],["annuel","Annuelle"],["fois","En N fois"]];
+
+/* La récurrence d'une entrée clôturée a déjà engendré sa suite, qui vit sur
+   l'accueil : c'est là qu'elle se règle. Seule exception, l'annuelle qui
+   attend son anniversaire — elle n'a pas encore de suite, et c'est donc ici
+   qu'on peut l'arrêter. */
+function champRecClos(m){
+  const d = DB.depenses[m.id];
+  if(!d || !d.rec) return "";
+  if(recDormante(d)){
+    const on = m.reconduire !== false;
+    return '<div class="champ"><label>Récurrence annuelle</label>' +
+      '<button class="bascule' + (on ? " on" : "") + '" data-act="bascule-reconduire">' +
+      '<span class="l">Revenir l\'an prochain' +
+      '<span class="d">' + (on ? "Réapparaît sur l'accueil le " + esc(frDate(plusMois(d.date, 12), true)) + "."
+                                : "Ne reviendra pas.") + '</span></span>' +
+      '<span class="k"></span></button></div>';
+  }
+  const finie = d.rec.mode === "fois" && (d.rec.index||1) >= (d.rec.total||1);
+  return '<div class="champ"><label>Récurrence</label><div class="aide" style="margin-top:0">' +
+    esc(cap(libelleRec(d.rec))) + (finie ? " — dernière échéance de la série."
+      : ' — l\'échéance suivante est déjà créée : c\'est elle qu\'il faut modifier pour changer ou arrêter la récurrence.') +
+    '</div></div>';
+}
 
 function vueModal(m){
   let c = "";
@@ -1549,9 +1633,11 @@ function vueModal(m){
     const fam = estFamille();
     const rev = !fam && m.sens === "revenu";
     const rec = m.rec || "aucune";
+    const pc = m.periode && DB.periodes[m.periode];
     c = '<h3>' + (m.id ? (rev ? "Modifier le revenu" : "Modifier la dépense")
                        : (rev ? "Nouveau revenu" : "Nouvelle dépense")) + '</h3>' +
-      '<div class="sous">' + (fam ? "Ardoise famille — une charge du foyer, sans effet sur ton perso."
+      '<div class="sous">' + (pc ? "Mois clôturé « " + esc(pc.titre) + " » — l'entrée y reste, seuls ses champs changent."
+                                  : fam ? "Ardoise famille — une charge du foyer, sans effet sur ton perso."
                                   : m.id ? "Tout reste modifiable, y compris le sens."
                                          : "La date du jour est déjà remplie.") + '</div>' +
       // L'ardoise famille ne reçoit que des dépenses : le choix du sens n'y a
@@ -1577,8 +1663,10 @@ function vueModal(m){
         '<button data-act="date-rapide" data-id="1">demain</button>' +
         '<button data-act="date-rapide" data-id="7">dans 7 j</button>' +
       '</div>' +
-      '<div class="aide">Une entrée datée plus tard reste comptée dans le total, signalée « à venir ».</div></div>' +
-      '<div class="champ"><label>Récurrence</label><div class="seg" style="width:100%">' +
+      (pc ? "" : '<div class="aide">Une entrée datée plus tard reste comptée dans le total, signalée « à venir ».</div>') +
+      '</div>' +
+      (pc ? champRecClos(m) :
+      '<div class="champ"><label>Récurrence</label><div class="seg serre" style="width:100%">' +
         RECS.map(([k,l]) => '<button style="flex:1" class="' + (rec === k ? "on" : "") + '" ' +
           'data-act="rec" data-id="' + k + '">' + l + '</button>').join("") + '</div>' +
       (rec === "fois" ?
@@ -1587,8 +1675,10 @@ function vueModal(m){
         '<div class="aide">Le montant saisi est celui d\'une échéance' +
           (m.recIndex > 1 ? ". Celle-ci est la n° " + m.recIndex + "." : ", répétée le même jour chaque mois.") + '</div></div>' : "") +
       (rec === "mensuel" ? '<div class="aide">Sans fin, jusqu\'à ce que tu la retires.</div>' : "") +
-      (rec !== "aucune" ? '<div class="aide">La suivante est créée au moment où tu clôtures le mois.</div>' : "") +
-      '</div>' +
+      (rec === "annuel" ? '<div class="aide">Revient le même jour l\'année suivante, sans fin. Entre-temps, elle attend dans l\'onglet Récurrences ' +
+        'et réapparaît sur l\'accueil au début de son mois d\'échéance.</div>' : "") +
+      (rec === "mensuel" || rec === "fois" ? '<div class="aide">La suivante est créée au moment où tu clôtures le mois.</div>' : "") +
+      '</div>') +
       (m.id ? '<div class="btns" style="margin:16px 0 0">' +
         '<button class="btn" style="flex:1" data-act="dupliquer-depense" data-id="' + m.id + '">Dupliquer</button>' +
         '<button class="btn dang" style="flex:1" data-act="supprimer-depense" data-id="' + m.id + '">Supprimer</button></div>' : "") +
@@ -1606,7 +1696,9 @@ function vueModal(m){
     const fut = futures(list);
     const rep = !!m.reporter;
     const dedans = rep ? list.filter(d => fut.indexOf(d) === -1) : list;
-    const recs = dedans.filter(d => d.rec && (d.rec.mode !== "fois" || (d.rec.index||1) < (d.rec.total||1)));
+    const recs = dedans.filter(d => d.rec && d.rec.mode !== "annuel" &&
+                                    (d.rec.mode !== "fois" || (d.rec.index||1) < (d.rec.total||1)));
+    const ans = dedans.filter(d => recAnnuelle(d) && !d.rec.suite);
     const titre = (m.titre || "").trim() || m.defaut;
     const dbl = titreDouble(titre);
     const force = dbl && m.forcer === norm(titre);
@@ -1628,7 +1720,9 @@ function vueModal(m){
       ', pour ' + esc(fmt(sommeDep(dedans))) + ' de dépenses' +
       (sommeRev(dedans) ? " et " + esc(fmt(sommeRev(dedans))) + " de revenus" : "") + '.' +
       (recs.length ? '<br>' + recs.length + (recs.length > 1 ? " récurrences seront reconduites" : " récurrence sera reconduite") +
-        ' sur le mois suivant.' : "") + '</div>' +
+        ' sur le mois suivant.' : "") +
+      (ans.length ? '<br>' + ans.length + (ans.length > 1 ? " récurrences annuelles reviendront" : " récurrence annuelle reviendra") +
+        ' dans un an.' : "") + '</div>' +
       '<div class="btns pied">' +
       '<button class="btn" style="flex:0 0 auto" data-act="fermer-modal">Renoncer</button>' +
       '<button class="btn pri" style="flex:1" data-act="cloture-ok"' + (dedans.length ? "" : " disabled") + '>' +
@@ -1806,6 +1900,7 @@ function lireDepenseModal(){
   const sens = (!estFamille() && m.sens === "revenu") ? "revenu" : "depense";
   let rec = null;
   if(m.rec === "mensuel") rec = { mode:"mensuel" };
+  else if(m.rec === "annuel") rec = { mode:"annuel" };
   else if(m.rec === "fois"){
     const n = Math.max(2, Math.min(60, parseInt((($("#m-fois") || {}).value || m.fois || "3"), 10) || 3));
     rec = { mode:"fois", total:n, index:Math.min(m.recIndex || 1, n) };
@@ -1885,8 +1980,11 @@ document.addEventListener("click", async ev => {
     ouvrirModal({ type:"depense", id:d.id, montant:brut(d.montant), libelle:d.libelle,
       note:d.note || "", date:d.date, sens:estRevenu(d) ? "revenu" : "depense",
       rec:d.rec ? d.rec.mode : "aucune", fois:d.rec && d.rec.total ? String(d.rec.total) : "3",
-      recIndex:d.rec && d.rec.index || 1 });
+      recIndex:d.rec && d.rec.index || 1, periode:d.periode || "" });
     return;
+  }
+  if(act === "bascule-reconduire"){
+    capturerModal(); state.modal.reconduire = state.modal.reconduire === false; render(); return;
   }
   if(act === "sens"){ capturerModal(); state.modal.sens = id; render(); return; }
   if(act === "rec"){ capturerModal(); state.modal.rec = id; render(); return; }
@@ -1910,8 +2008,18 @@ document.addEventListener("click", async ev => {
       const d = DB.depenses[state.modal.id];
       if(d){
         d.montant = v.montant; d.libelle = v.libelle; d.note = v.note;
-        d.date = v.date; d.sens = v.sens; d.rec = v.rec;
+        d.date = v.date; d.sens = v.sens;
+        // Une entrée clôturée garde sa récurrence telle quelle : sa suite existe
+        // déjà. Seule l'annuelle en attente peut être arrêtée.
+        if(!d.periode){
+          // Une annuelle rouverte a peut-être déjà réveillé sa suite : la marque
+          // doit survivre à la modification, sans quoi elle renaîtrait en double.
+          if(v.rec && v.rec.mode === "annuel" && d.rec && d.rec.mode === "annuel" && d.rec.suite) v.rec.suite = true;
+          d.rec = v.rec;
+        }
+        else if(recDormante(d) && state.modal.reconduire === false) d.rec = null;
         sauverDepense(d);
+        if(d.periode) bornerPeriode(d.periode);
       }
       fermerModal();
       toast("Entrée modifiée");
@@ -1934,6 +2042,7 @@ document.addEventListener("click", async ev => {
     if(!d) return;
     corbeille = { depenses:[JSON.parse(JSON.stringify(d))], periodes:[] };
     supprimerDepenseDB(id);
+    if(d.periode) bornerPeriode(d.periode);
     fermerModal();
     toast("Entrée supprimée", "annuler-suppr");
     return;
@@ -1982,6 +2091,9 @@ document.addEventListener("click", async ev => {
       return;
     }
     const r = cloturer(titre, !!state.modal.reporter);
+    // Une annuelle clôturée le mois même de son anniversaire, un an après une
+    // autre, peut déjà être due : on la ramène sans attendre le lendemain.
+    if(r) reveillerAnnuelles();
     fermerModal();
     if(!r){ toast("Rien à clôturer"); return; }
     toast(r.nb + (r.nb > 1 ? " entrées clôturées" : " entrée clôturée") +
@@ -2151,6 +2263,7 @@ async function importerFichier(f){
   try{
     const x = JSON.parse(await f.text());
     const r = fusionnerSauvegarde(x);
+    reveillerAnnuelles();
     render();
     const ou = r.perso && r.famille ? "" : r.famille ? " en famille" : r.perso ? " en perso" : "";
     toast(r.nd + (r.nd > 1 ? " entrées" : " entrée") + " et " + r.np + " mois ajoutés" + ou);
@@ -2258,7 +2371,9 @@ async function demarrer(){
   DB.settings.accent = accentActuel();
 
   state.neuf = DB.meta.vue !== VERSION;
+  const rev = reveillerAnnuelles();
   render();
+  if(rev) toast(rev + (rev > 1 ? " récurrences annuelles reviennent" : " récurrence annuelle revient") + " ce mois-ci");
   majIcone();
   majQuota();
 }
@@ -2268,7 +2383,7 @@ async function demarrer(){
 let _jour = todayISO();
 document.addEventListener("visibilitychange", () => {
   if(document.visibilityState !== "visible" || !pret) return;
-  if(_jour !== todayISO()){ _jour = todayISO(); render(); }
+  if(_jour !== todayISO()){ _jour = todayISO(); reveillerAnnuelles(); render(); }
 });
 window.addEventListener("pagehide", () => { ecouler(); });
 
